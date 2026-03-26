@@ -1,0 +1,14 @@
+.DS_Store
+
+# Swift build
+.build/
+.swiftpm/
+Diriger.app/
+
+# Signing credentials
+*.p12
+*.p8
+
+# Build artifacts
+*.dmg
+*.zip
