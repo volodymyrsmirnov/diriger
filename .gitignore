@@ -1,0 +1,6 @@
+.DS_Store
+
+# Swift build
+.build/
+.swiftpm/
+Diriger.app/
