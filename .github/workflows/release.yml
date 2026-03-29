@@ -3,6 +3,8 @@ name: Build, Sign, Notarize & Release
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '*.md'
 
 permissions:
   contents: write
