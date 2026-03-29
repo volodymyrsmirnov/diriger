@@ -16,21 +16,21 @@ A lightweight macOS menu bar app for quickly switching between Google Chrome pro
 - Google Chrome
 - Accessibility permission (prompted on first use)
 
-## Building
+## Installation
+
+### Download
+
+1. Download the latest `.dmg` from [Releases](https://github.com/volodymyrsmirnov/diriger/releases/latest)
+2. Open the `.dmg` and drag `Diriger.app` to `/Applications`
+3. Launch Diriger — on first profile switch, macOS will prompt for Accessibility permission. Grant it in System Settings > Privacy & Security > Accessibility.
+
+### Build from source
 
 ```bash
 bash scripts/build-app.sh
 ```
 
-The build script will:
-1. Compile the Swift package in release mode
-2. Assemble the `.app` bundle
-3. Generate the app icon
-4. Code sign using the first available signing identity (falls back to ad-hoc)
-
-## Installation
-
-After building, move `Diriger.app` to `/Applications` and launch it. On first profile switch, macOS will prompt for Accessibility permission — grant it in System Settings > Privacy & Security > Accessibility.
+This will compile the package, assemble and sign the `.app` bundle. Move the resulting `Diriger.app` to `/Applications`.
 
 ## How It Works
 
