@@ -13,6 +13,13 @@ cd "$PROJECT_DIR"
 swift build -c release
 BIN_PATH="$(swift build -c release --show-bin-path)"
 
+# SPM generates resource_bundle_accessor.swift using Bundle.main.bundleURL which
+# resolves to the .app root — but macOS codesign forbids content there. Patch the
+# accessor to use Bundle.main.resourceURL (Contents/Resources/) and rebuild.
+find .build -name "resource_bundle_accessor.swift" -path "*/release/*" -exec \
+    sed -i '' 's/Bundle\.main\.bundleURL/Bundle.main.resourceURL!/' {} +
+swift build -c release
+
 echo "Assembling app bundle..."
 rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_BUNDLE/Contents/MacOS"
