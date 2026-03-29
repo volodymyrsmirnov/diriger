@@ -22,6 +22,11 @@ cp "$BIN_PATH/$APP_NAME" "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 cp "$PROJECT_DIR/Resources/Info.plist" "$APP_BUNDLE/Contents/Info.plist"
 cp "$PROJECT_DIR/Resources/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
 
+# Copy SPM resource bundles (e.g. KeyboardShortcuts localization)
+for bundle in "$BIN_PATH"/*.bundle; do
+    [ -d "$bundle" ] && cp -R "$bundle" "$APP_BUNDLE/Contents/Resources/"
+done
+
 # Inject version if provided
 if [ -n "$APP_VERSION" ]; then
     echo "Setting version to $APP_VERSION..."
