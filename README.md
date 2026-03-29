@@ -18,11 +18,16 @@ A lightweight macOS menu bar app for quickly switching between Google Chrome pro
 
 ## Installation
 
+### Homebrew
+
+```bash
+brew install volodymyrsmirnov/tap/diriger
+```
+
 ### Download
 
 1. Download the latest `.dmg` from [Releases](https://github.com/volodymyrsmirnov/diriger/releases/latest)
 2. Open the `.dmg` and drag `Diriger.app` to `/Applications`
-3. Launch Diriger — on first profile switch, macOS will prompt for Accessibility permission. Grant it in System Settings > Privacy & Security > Accessibility.
 
 ### Build from source
 
@@ -31,6 +36,8 @@ bash scripts/build-app.sh
 ```
 
 This will compile the package, assemble and sign the `.app` bundle. Move the resulting `Diriger.app` to `/Applications`.
+
+On first profile switch, macOS will prompt for Accessibility permission. Grant it in System Settings > Privacy & Security > Accessibility.
 
 ## How It Works
 
