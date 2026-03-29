@@ -13,6 +13,9 @@ jobs:
   release:
     runs-on: macos-15
     timeout-minutes: 30
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      dmg_sha256: ${{ steps.dmg_sha.outputs.sha256 }}
 
     steps:
       - name: Checkout
@@ -153,6 +156,10 @@ jobs:
           git tag "${{ steps.version.outputs.tag }}"
           git push origin "${{ steps.version.outputs.tag }}"
 
+      - name: Compute DMG checksum
+        id: dmg_sha
+        run: echo "sha256=$(shasum -a 256 "$DMG_NAME" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -162,29 +169,6 @@ jobs:
             --title "Diriger ${{ steps.version.outputs.version }}" \
             --generate-notes
 
-      - name: Update Homebrew tap
-        env:
-          GH_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          SHA=$(shasum -a 256 "$DMG_NAME" | awk '{print $1}')
-
-          git clone https://x-access-token:${GH_TOKEN}@github.com/volodymyrsmirnov/homebrew-tap.git /tmp/homebrew-tap
-          cd /tmp/homebrew-tap
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # Update latest cask
-          sed -i '' "s/version \".*\"/version \"$VERSION\"/" Casks/diriger.rb
-          sed -i '' "s/sha256 \".*\"/sha256 \"$SHA\"/" Casks/diriger.rb
-
-          # Create versioned cask (brew install diriger@X.Y.Z)
-          sed "s/cask \"diriger\"/cask \"diriger@$VERSION\"/" Casks/diriger.rb > "Casks/diriger@$VERSION.rb"
-
-          git add Casks/
-          git commit -m "Update Diriger to $VERSION"
-          git push
-
       - name: Cleanup
         if: always()
         run: |
@@ -192,3 +176,19 @@ jobs:
             security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
           fi
           rm -f "$RUNNER_TEMP/certificate.p12" "$RUNNER_TEMP/AuthKey.p8" 2>/dev/null || true
+
+  homebrew:
+    needs: release
+    uses: volodymyrsmirnov/homebrew-tap/.github/workflows/update.yml@main
+    with:
+      type: cask
+      name: diriger
+      version: ${{ needs.release.outputs.version }}
+      desc: "Menu bar app for quickly switching between Google Chrome profiles"
+      homepage: "https://github.com/volodymyrsmirnov/diriger"
+      cask_url: "https://github.com/volodymyrsmirnov/diriger/releases/download/v#{version}/Diriger-#{version}.dmg"
+      cask_sha256: ${{ needs.release.outputs.dmg_sha256 }}
+      cask_app_name: "Diriger.app"
+      cask_depends_on: 'macos: ">= :sonoma"'
+    secrets:
+      tap_token: ${{ secrets.TAP_GITHUB_TOKEN }}
