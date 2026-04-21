@@ -33,11 +33,13 @@ final class AppServices {
     static let shared = AppServices()
 
     let profileManager: ProfileManager
+    let ruleStore: RuleStore
     let linkPicker: LinkPickerController
 
     private init() {
         let manager = ProfileManager()
         self.profileManager = manager
+        self.ruleStore = RuleStore()
         self.linkPicker = LinkPickerController(profileManager: manager)
     }
 }
@@ -58,8 +60,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
               let url = URL(string: urlString)
         else { return }
 
+        let sourcePID = event.attributeDescriptor(
+            forKeyword: AEKeyword(keySenderPIDAttr)
+        )?.int32Value
+        let sourceBundleID = sourcePID.flatMap {
+            NSRunningApplication(processIdentifier: pid_t($0))?.bundleIdentifier
+        }
+
         Task { @MainActor in
-            AppServices.shared.linkPicker.present(url: url)
+            let services = AppServices.shared
+            if let profile = RuleEngine.firstMatch(
+                in: services.ruleStore.rules,
+                url: url,
+                sourceBundleID: sourceBundleID,
+                availableProfiles: services.profileManager.profiles
+            ) {
+                ChromeLauncher.openURL(url, in: profile)
+            } else {
+                services.linkPicker.present(url: url, source: sourceBundleID)
+            }
         }
     }
 }
@@ -78,7 +97,10 @@ struct DirigerApp: App {
         }
 
         Settings {
-            SettingsView(profiles: services.profileManager.profiles)
+            SettingsView(
+                profiles: services.profileManager.profiles,
+                ruleStore: services.ruleStore
+            )
         }
     }
 }

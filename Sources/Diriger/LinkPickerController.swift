@@ -23,7 +23,8 @@ final class LinkPickerController {
         self.profileManager = profileManager
     }
 
-    func present(url: URL) {
+    func present(url: URL, source: String? = nil) {
+        _ = source
         let profiles = Array(profileManager.profiles.prefix(KeyboardShortcuts.Name.maxSlots))
         guard !profiles.isEmpty else { return }
 

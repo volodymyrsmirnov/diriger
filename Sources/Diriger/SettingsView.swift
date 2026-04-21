@@ -5,6 +5,8 @@ import ServiceManagement
 
 struct SettingsView: View {
     let profiles: [ChromeProfile]
+    let ruleStore: RuleStore
+
     @State private var launchAtLogin = {
         let status = SMAppService.mainApp.status
         return status == .enabled || status == .requiresApproval
@@ -14,7 +16,26 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section("Profiles") {
+            Section {
+                Toggle("Launch at login", isOn: Binding(
+                    get: { launchAtLogin },
+                    set: { newValue in
+                        do {
+                            if newValue {
+                                try SMAppService.mainApp.register()
+                            } else {
+                                try SMAppService.mainApp.unregister()
+                            }
+                        } catch {
+                            print("Launch at login failed: \(error)")
+                        }
+                        let status = SMAppService.mainApp.status
+                        launchAtLogin = status == .enabled || status == .requiresApproval
+                    }
+                ))
+            }
+
+            Section("Profile Shortcuts") {
                 if profiles.isEmpty {
                     Text("No Chrome profiles found.")
                         .foregroundStyle(.secondary)
@@ -43,53 +64,43 @@ struct SettingsView: View {
                 }
             }
 
-            Section("Default Browser") {
-                Toggle("Enable links selection", isOn: Binding(
+            Section {
+                Toggle(isOn: Binding(
                     get: { isDefaultBrowser },
                     set: { newValue in
                         if newValue {
-                            DefaultBrowserService.register { _ in
-                                refreshDefaultBrowserState()
-                            }
+                            DefaultBrowserService.register { _ in refreshDefaultBrowserState() }
                         } else {
-                            DefaultBrowserService.unregister { _ in
-                                refreshDefaultBrowserState()
-                            }
+                            DefaultBrowserService.unregister { _ in refreshDefaultBrowserState() }
                         }
                     }
-                ))
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Current default: \(currentBrowserName ?? "Unknown")")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text("Turning this off hands the default role back to another installed browser.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                )) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Use Diriger to open web links")
+                        Text("Current default: \(currentBrowserName ?? "Unknown"). Turning this off hands the role back to another installed browser.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
+            } header: {
+                Text("Link Handling")
             }
 
-            Section("General") {
-                Toggle("Launch at Login", isOn: Binding(
-                    get: { launchAtLogin },
-                    set: { newValue in
-                        do {
-                            if newValue {
-                                try SMAppService.mainApp.register()
-                            } else {
-                                try SMAppService.mainApp.unregister()
-                            }
-                        } catch {
-                            print("Launch at login failed: \(error)")
-                        }
-                        let status = SMAppService.mainApp.status
-                        launchAtLogin = status == .enabled || status == .requiresApproval
-                    }
-                ))
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("When a URL matches a rule, it opens directly in the selected profile, bypassing the picker. The first match in the list wins.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    RulesTableView(store: ruleStore, profiles: profiles)
+                }
+                .opacity(isDefaultBrowser ? 1.0 : 0.5)
+                .disabled(!isDefaultBrowser)
+            } header: {
+                Text("Routing Rules")
             }
         }
         .formStyle(.grouped)
-        .frame(width: 450, height: 500)
+        .frame(width: 760, height: 720)
         .onAppear {
             let status = SMAppService.mainApp.status
             launchAtLogin = status == .enabled || status == .requiresApproval
