@@ -2,7 +2,10 @@ import AppKit
 import Foundation
 
 enum DefaultBrowserService {
-    private static let schemes = ["http", "https"]
+    // macOS keeps http and https in sync for the web-browser role; setting
+    // both in succession triggers NSFileReadUnknownError on the second call,
+    // so we only set http and let the system propagate to https.
+    private static let writeScheme = "http"
     private static let probeURL = URL(string: "https://example.com")!
 
     private static var bundleID: String {
@@ -46,16 +49,17 @@ enum DefaultBrowserService {
     }
 
     private static func setDefault(appURL: URL) async throws {
-        try await withThrowingTaskGroup(of: Void.self) { group in
-            for scheme in schemes {
-                group.addTask {
-                    try await NSWorkspace.shared.setDefaultApplication(
-                        at: appURL,
-                        toOpenURLsWithScheme: scheme
-                    )
-                }
-            }
-            try await group.waitForAll()
+        do {
+            try await NSWorkspace.shared.setDefaultApplication(
+                at: appURL,
+                toOpenURLsWithScheme: writeScheme
+            )
+        } catch {
+            let ns = error as NSError
+            Log.browser.error(
+                "setDefaultApplication failed for scheme=\(writeScheme, privacy: .public) at=\(appURL.path, privacy: .public) domain=\(ns.domain, privacy: .public) code=\(ns.code) reason=\(ns.localizedDescription, privacy: .public)"
+            )
+            throw error
         }
     }
 
