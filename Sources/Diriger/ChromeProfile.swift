@@ -1,9 +1,22 @@
 import Foundation
+import SwiftUI
 
-struct ChromeProfile: Identifiable, Hashable {
+struct ChromeProfile: Identifiable, Hashable, Sendable {
     let directoryName: String
     let displayName: String
     let email: String
 
     var id: String { directoryName }
+}
+
+extension ChromeProfile {
+    var initial: String {
+        String(displayName.prefix(1)).uppercased()
+    }
+
+    var fallbackColor: Color {
+        let palette: [Color] = [.blue, .green, .orange, .purple, .pink, .red, .teal, .indigo, .mint, .cyan]
+        let hash = directoryName.utf8.reduce(0) { ($0 &+ Int($1)) & 0x7FFFFFFF }
+        return palette[hash % palette.count]
+    }
 }

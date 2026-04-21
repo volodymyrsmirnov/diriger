@@ -39,14 +39,21 @@ final class RuleStore {
     }
 
     private func persist() {
-        guard let data = try? JSONEncoder().encode(rules) else { return }
-        UserDefaults.standard.set(data, forKey: Self.defaultsKey)
+        do {
+            let data = try JSONEncoder().encode(rules)
+            UserDefaults.standard.set(data, forKey: Self.defaultsKey)
+        } catch {
+            Log.rules.error("Failed to persist rules: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     private static func load() -> [RoutingRule] {
-        guard let data = UserDefaults.standard.data(forKey: defaultsKey),
-              let decoded = try? JSONDecoder().decode([RoutingRule].self, from: data)
-        else { return [] }
-        return decoded
+        guard let data = UserDefaults.standard.data(forKey: defaultsKey) else { return [] }
+        do {
+            return try JSONDecoder().decode([RoutingRule].self, from: data)
+        } catch {
+            Log.rules.error("Failed to decode persisted rules; starting empty: \(error.localizedDescription, privacy: .public)")
+            return []
+        }
     }
 }

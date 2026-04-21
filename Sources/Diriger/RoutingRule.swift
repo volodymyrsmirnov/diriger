@@ -1,6 +1,6 @@
 import Foundation
 
-enum RuleKind: String, Codable, CaseIterable, Identifiable {
+enum RuleKind: String, Codable, CaseIterable, Identifiable, Sendable {
     case source
     case domain
     case regex
@@ -16,7 +16,7 @@ enum RuleKind: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-struct RoutingRule: Identifiable, Codable, Hashable {
+struct RoutingRule: Identifiable, Codable, Hashable, Sendable {
     var id: UUID
     var kind: RuleKind
     var pattern: String

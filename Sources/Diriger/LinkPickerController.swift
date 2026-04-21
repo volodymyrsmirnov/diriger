@@ -23,10 +23,12 @@ final class LinkPickerController {
         self.profileManager = profileManager
     }
 
-    func present(url: URL, source: String? = nil) {
-        _ = source
+    func present(url: URL) {
         let profiles = Array(profileManager.profiles.prefix(KeyboardShortcuts.Name.maxSlots))
-        guard !profiles.isEmpty else { return }
+        guard !profiles.isEmpty else {
+            Log.picker.warning("present() called with no profiles; dropping \(url.absoluteString, privacy: .public)")
+            return
+        }
 
         state.profiles = profiles
         state.url = url
@@ -34,9 +36,7 @@ final class LinkPickerController {
 
         let panel = ensurePanel()
         layoutContent(into: panel)
-
-        let cursor = NSEvent.mouseLocation
-        positionPanel(panel, near: cursor)
+        positionPanel(panel, near: NSEvent.mouseLocation)
 
         panel.orderFrontRegardless()
         panel.makeKey()
@@ -157,7 +157,14 @@ final class LinkPickerController {
         guard state.profiles.indices.contains(index), let url = state.url else { return }
         let profile = state.profiles[index]
         hide()
-        ChromeLauncher.openURL(url, in: profile)
+        Task {
+            do {
+                try await ChromeLauncher.openURL(url, in: profile)
+            } catch {
+                Log.chrome.error("openURL failed: \(error.localizedDescription, privacy: .public)")
+                ErrorAlert.present(error)
+            }
+        }
     }
 
     private func copy() {
@@ -181,7 +188,7 @@ final class LinkPickerController {
 }
 
 struct PickerRoot: View {
-    let state: LinkPickerState
+    @Bindable var state: LinkPickerState
     let activate: (Int) -> Void
 
     var body: some View {
@@ -189,10 +196,7 @@ struct PickerRoot: View {
             LinkPickerView(
                 profiles: state.profiles,
                 url: url,
-                selection: Binding(
-                    get: { state.selection },
-                    set: { state.selection = $0 }
-                ),
+                selection: $state.selection,
                 onActivate: activate
             )
         } else {

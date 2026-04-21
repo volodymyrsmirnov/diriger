@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 
-struct DefaultBrowserService {
+enum DefaultBrowserService {
     private static let schemes = ["http", "https"]
     private static let probeURL = URL(string: "https://example.com")!
 
@@ -28,48 +28,42 @@ struct DefaultBrowserService {
         return name.hasSuffix(".app") ? String(name.dropLast(4)) : name
     }
 
-    static func register(completion: @escaping (Bool) -> Void) {
-        guard let appURL = Bundle.main.bundleURL as URL? else {
-            completion(false)
-            return
-        }
-        setDefault(appURL: appURL, completion: completion)
+    static func register() async throws {
+        try await setDefault(appURL: Bundle.main.bundleURL)
     }
 
-    static func unregister(completion: @escaping (Bool) -> Void) {
+    struct NoFallbackBrowserError: LocalizedError {
+        var errorDescription: String? {
+            "No other web browser is installed to hand the default role back to."
+        }
+    }
+
+    static func unregister() async throws {
         guard let fallback = fallbackHandlerURL() else {
-            completion(false)
-            return
+            throw NoFallbackBrowserError()
         }
-        setDefault(appURL: fallback, completion: completion)
+        try await setDefault(appURL: fallback)
     }
 
-    private static func setDefault(appURL: URL, completion: @escaping (Bool) -> Void) {
-        let group = DispatchGroup()
-        var success = true
-
-        for scheme in schemes {
-            group.enter()
-            NSWorkspace.shared.setDefaultApplication(
-                at: appURL,
-                toOpenURLsWithScheme: scheme
-            ) { error in
-                if error != nil { success = false }
-                group.leave()
+    private static func setDefault(appURL: URL) async throws {
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for scheme in schemes {
+                group.addTask {
+                    try await NSWorkspace.shared.setDefaultApplication(
+                        at: appURL,
+                        toOpenURLsWithScheme: scheme
+                    )
+                }
             }
-        }
-
-        group.notify(queue: .main) {
-            completion(success)
+            try await group.waitForAll()
         }
     }
 
     private static func fallbackHandlerURL() -> URL? {
         let handlers = NSWorkspace.shared.urlsForApplications(toOpen: probeURL)
-        for url in handlers {
-            guard let id = Bundle(url: url)?.bundleIdentifier else { continue }
-            if id != bundleID { return url }
+        return handlers.first { url in
+            guard let id = Bundle(url: url)?.bundleIdentifier else { return false }
+            return id != bundleID
         }
-        return nil
     }
 }

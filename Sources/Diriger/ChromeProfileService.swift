@@ -1,27 +1,47 @@
 import Foundation
 import AppKit
 
-struct ChromeProfileService {
-    static let chromeLocalStatePath: String = {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        return "\(home)/Library/Application Support/Google/Chrome/Local State"
-    }()
+enum ChromeProfileService {
+    private static var chromeSupportDirectory: URL {
+        FileManager.default
+            .homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/Google/Chrome", isDirectory: true)
+    }
+
+    private static var localStateURL: URL {
+        chromeSupportDirectory.appendingPathComponent("Local State", isDirectory: false)
+    }
 
     static func loadProfiles() -> [ChromeProfile] {
-        guard let data = FileManager.default.contents(atPath: chromeLocalStatePath),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let profile = json["profile"] as? [String: Any],
-              let infoCache = profile["info_cache"] as? [String: Any]
-        else {
+        let url = localStateURL
+        let data: Data
+        do {
+            data = try Data(contentsOf: url)
+        } catch {
+            Log.chrome.error("Failed to read Chrome Local State at \(url.path, privacy: .public): \(error.localizedDescription, privacy: .public)")
             return []
         }
 
-        return infoCache.compactMap { (directoryName, value) -> ChromeProfile? in
+        let infoCache: [String: Any]
+        do {
+            let parsed = try JSONSerialization.jsonObject(with: data)
+            guard let root = parsed as? [String: Any],
+                  let profile = root["profile"] as? [String: Any],
+                  let cache = profile["info_cache"] as? [String: Any]
+            else {
+                Log.chrome.error("Chrome Local State has unexpected structure")
+                return []
+            }
+            infoCache = cache
+        } catch {
+            Log.chrome.error("Failed to parse Chrome Local State JSON: \(error.localizedDescription, privacy: .public)")
+            return []
+        }
+
+        return infoCache.compactMap { directoryName, value -> ChromeProfile? in
             guard let info = value as? [String: Any],
                   let displayName = info["name"] as? String
-            else {
-                return nil
-            }
+            else { return nil }
             let email = info["user_name"] as? String ?? ""
             return ChromeProfile(
                 directoryName: directoryName,
@@ -36,8 +56,10 @@ struct ChromeProfileService {
         NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.google.Chrome")
     }
 
-    static func profilePicturePath(for profile: ChromeProfile) -> String {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        return "\(home)/Library/Application Support/Google/Chrome/\(profile.directoryName)/Google Profile Picture.png"
+    static func profilePictureURL(for profile: ChromeProfile) -> URL? {
+        let url = chromeSupportDirectory
+            .appendingPathComponent(profile.directoryName, isDirectory: true)
+            .appendingPathComponent("Google Profile Picture.png", isDirectory: false)
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
 }

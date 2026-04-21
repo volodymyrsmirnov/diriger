@@ -22,63 +22,78 @@ final class ProfileManager {
         for profile in profiles.prefix(KeyboardShortcuts.Name.maxSlots) {
             let name = KeyboardShortcuts.Name.forProfile(profile.directoryName)
             KeyboardShortcuts.onKeyUp(for: name) {
-                ChromeLauncher.switchToProfile(profile)
+                Task { @MainActor in
+                    do {
+                        try await ChromeLauncher.switchToProfile(profile)
+                    } catch {
+                        Log.chrome.error("switchToProfile failed: \(error.localizedDescription, privacy: .public)")
+                        ErrorAlert.present(error)
+                    }
+                }
             }
         }
     }
 }
 
 @MainActor
-final class AppServices {
-    static let shared = AppServices()
-
+final class AppDelegate: NSObject, NSApplicationDelegate {
     let profileManager: ProfileManager
     let ruleStore: RuleStore
     let linkPicker: LinkPickerController
 
-    private init() {
-        let manager = ProfileManager()
-        self.profileManager = manager
+    override init() {
+        let pm = ProfileManager()
+        self.profileManager = pm
         self.ruleStore = RuleStore()
-        self.linkPicker = LinkPickerController(profileManager: manager)
+        self.linkPicker = LinkPickerController(profileManager: pm)
+        super.init()
     }
-}
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
-    func applicationWillFinishLaunching(_ notification: Notification) {
-        NSAppleEventManager.shared().setEventHandler(
-            self,
-            andSelector: #selector(handleURL(event:replyEvent:)),
-            forEventClass: AEEventClass(kInternetEventClass),
-            andEventID: AEEventID(kAEGetURL)
-        )
+    nonisolated func applicationWillFinishLaunching(_ notification: Notification) {
+        MainActor.assumeIsolated {
+            NSAppleEventManager.shared().setEventHandler(
+                self,
+                andSelector: #selector(handleURL(event:replyEvent:)),
+                forEventClass: AEEventClass(kInternetEventClass),
+                andEventID: AEEventID(kAEGetURL)
+            )
+        }
     }
 
     @objc
     func handleURL(event: NSAppleEventDescriptor, replyEvent: NSAppleEventDescriptor) {
         guard let urlString = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue,
-              let url = URL(string: urlString)
-        else { return }
+              let url = URL(string: urlString),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https"
+        else {
+            Log.app.info("Ignoring non-http(s) URL event")
+            return
+        }
 
-        let sourcePID = event.attributeDescriptor(
-            forKeyword: AEKeyword(keySenderPIDAttr)
-        )?.int32Value
+        let sourcePID = event
+            .attributeDescriptor(forKeyword: AEKeyword(keySenderPIDAttr))?
+            .int32Value
         let sourceBundleID = sourcePID.flatMap {
             NSRunningApplication(processIdentifier: pid_t($0))?.bundleIdentifier
         }
 
-        Task { @MainActor in
-            let services = AppServices.shared
-            if let profile = RuleEngine.firstMatch(
-                in: services.ruleStore.rules,
-                url: url,
-                sourceBundleID: sourceBundleID,
-                availableProfiles: services.profileManager.profiles
-            ) {
-                ChromeLauncher.openURL(url, in: profile)
-            } else {
-                services.linkPicker.present(url: url, source: sourceBundleID)
+        if let profile = RuleEngine.firstMatch(
+            in: ruleStore.rules,
+            url: url,
+            sourceBundleID: sourceBundleID,
+            availableProfiles: profileManager.profiles
+        ) {
+            Task {
+                do {
+                    try await ChromeLauncher.openURL(url, in: profile)
+                } catch {
+                    Log.chrome.error("openURL failed: \(error.localizedDescription, privacy: .public)")
+                    ErrorAlert.present(error)
+                }
             }
+        } else {
+            linkPicker.present(url: url)
         }
     }
 }
@@ -86,21 +101,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 @main
 struct DirigerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    private let services = AppServices.shared
 
     var body: some Scene {
         MenuBarExtra("Diriger", systemImage: "globe") {
-            MenuBarView(
-                profiles: services.profileManager.profiles,
-                onRefresh: { services.profileManager.loadProfiles() }
-            )
+            MenuBarView(onRefresh: { appDelegate.profileManager.loadProfiles() })
+                .environment(appDelegate.profileManager)
         }
 
         Settings {
-            SettingsView(
-                profiles: services.profileManager.profiles,
-                ruleStore: services.ruleStore
-            )
+            SettingsView()
+                .environment(appDelegate.profileManager)
+                .environment(appDelegate.ruleStore)
         }
     }
 }

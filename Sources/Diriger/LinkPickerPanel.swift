@@ -51,15 +51,16 @@ final class LinkPickerPanel: NSPanel {
             break
         }
 
-        if cmd, let chars = event.charactersIgnoringModifiers, chars == "c" {
+        if cmd, event.charactersIgnoringModifiers == "c" {
             onCopy?()
             return
         }
 
-        if let chars = event.charactersIgnoringModifiers, chars.count == 1,
+        if !cmd,
+           let chars = event.charactersIgnoringModifiers,
+           chars.count == 1,
            let scalar = chars.unicodeScalars.first,
-           let digit = Int(String(scalar)),
-           !cmd {
+           let digit = Int(String(scalar)) {
             let index = digit == 0 ? 9 : digit - 1
             onSelectIndex?(index)
             return
@@ -122,9 +123,7 @@ struct ProfileRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            profileImage
-                .frame(width: 32, height: 32)
-                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            ProfileAvatar(profile: profile, shape: .roundedRect(cornerRadius: 7), size: 32)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(profile.displayName)
@@ -166,29 +165,5 @@ struct ProfileRow: View {
             return profile.email
         }
         return "Press \(numberLabel) or ⏎ to open"
-    }
-
-    @ViewBuilder
-    private var profileImage: some View {
-        let path = ChromeProfileService.profilePicturePath(for: profile)
-        if let nsImage = NSImage(contentsOfFile: path) {
-            Image(nsImage: nsImage)
-                .resizable()
-                .interpolation(.high)
-        } else {
-            ZStack {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(fallbackColor)
-                Text(String(profile.displayName.prefix(1)).uppercased())
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(.white)
-            }
-        }
-    }
-
-    private var fallbackColor: Color {
-        let palette: [Color] = [.blue, .green, .orange, .purple, .pink, .red, .teal, .indigo, .mint, .cyan]
-        let hash = profile.directoryName.utf8.reduce(0) { ($0 &+ Int($1)) & 0x7FFFFFFF }
-        return palette[hash % palette.count]
     }
 }

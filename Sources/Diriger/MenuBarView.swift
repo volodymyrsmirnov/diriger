@@ -1,24 +1,33 @@
 import SwiftUI
+import AppKit
 import KeyboardShortcuts
 
 struct MenuBarView: View {
-    let profiles: [ChromeProfile]
     let onRefresh: () -> Void
+
+    @Environment(ProfileManager.self) private var profileManager
     @Environment(\.openSettings) private var openSettings
 
     var body: some View {
-        if profiles.isEmpty {
+        if profileManager.profiles.isEmpty {
             Text("No Chrome profiles found")
                 .foregroundStyle(.secondary)
         } else {
-            ForEach(profiles) { profile in
+            ForEach(profileManager.profiles) { profile in
                 Button {
-                    ChromeLauncher.switchToProfile(profile)
+                    Task {
+                        do {
+                            try await ChromeLauncher.switchToProfile(profile)
+                        } catch {
+                            Log.chrome.error("switchToProfile failed: \(error.localizedDescription, privacy: .public)")
+                            ErrorAlert.present(error)
+                        }
+                    }
                 } label: {
                     Label {
                         Text(profileLabel(for: profile))
                     } icon: {
-                        profileImage(for: profile)
+                        menuIcon(for: profile)
                     }
                 }
                 .badge(shortcutLabel(for: profile))
@@ -27,9 +36,7 @@ struct MenuBarView: View {
 
         Divider()
 
-        Button("Refresh Profiles") {
-            onRefresh()
-        }
+        Button("Refresh Profiles", action: onRefresh)
 
         Button("Settings...") {
             openSettings()
@@ -54,28 +61,17 @@ struct MenuBarView: View {
     }
 
     private func profileLabel(for profile: ChromeProfile) -> String {
-        if profile.email.isEmpty {
-            return profile.displayName
-        }
-        return "\(profile.displayName) (\(profile.email))"
+        profile.email.isEmpty
+            ? profile.displayName
+            : "\(profile.displayName) (\(profile.email))"
     }
 
-    private func profileImage(for profile: ChromeProfile) -> Image {
-        let path = ChromeProfileService.profilePicturePath(for: profile)
-        if let nsImage = NSImage(contentsOfFile: path) {
-            return Image(nsImage: circularImage(nsImage, size: 18))
+    @ViewBuilder
+    private func menuIcon(for profile: ChromeProfile) -> some View {
+        if let image = ProfileAvatar(profile: profile, size: 18).rasterized() {
+            Image(nsImage: image)
+        } else {
+            Image(systemName: "person.circle.fill")
         }
-        return Image(systemName: "person.circle.fill")
-    }
-
-    private func circularImage(_ source: NSImage, size: CGFloat) -> NSImage {
-        let result = NSImage(size: NSSize(width: size, height: size))
-        result.lockFocus()
-        let rect = NSRect(x: 0, y: 0, width: size, height: size)
-        NSBezierPath(ovalIn: rect).addClip()
-        source.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1)
-        result.unlockFocus()
-        result.isTemplate = false
-        return result
     }
 }

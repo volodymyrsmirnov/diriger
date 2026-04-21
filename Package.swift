@@ -17,7 +17,13 @@ let package = Package(
         .executableTarget(
             name: "Diriger",
             dependencies: ["KeyboardShortcuts"],
-            path: "Sources/Diriger"
+            path: "Sources/Diriger",
+            swiftSettings: [
+                .enableUpcomingFeature("StrictConcurrency"),
+                .enableUpcomingFeature("InferSendableFromCaptures"),
+                .enableUpcomingFeature("GlobalActorIsolatedTypesUsability"),
+                .enableUpcomingFeature("IsolatedDefaultValues")
+            ]
         )
     ]
 )

@@ -9,8 +9,8 @@ private let pillHeight: CGFloat = 26
 private let pillHorizontalPadding: CGFloat = 8
 
 struct RulesTableView: View {
-    let store: RuleStore
-    let profiles: [ChromeProfile]
+    @Environment(RuleStore.self) private var store
+    @Environment(ProfileManager.self) private var profileManager
 
     var body: some View {
         if store.rules.isEmpty {
@@ -39,7 +39,7 @@ struct RulesTableView: View {
             ForEach(Array(store.rules.enumerated()), id: \.element.id) { index, rule in
                 RuleRow(
                     rule: rule,
-                    profiles: profiles,
+                    profiles: profileManager.profiles,
                     canMoveUp: index > 0,
                     canMoveDown: index < store.rules.count - 1,
                     onChange: { store.update($0) },
@@ -63,7 +63,7 @@ struct RulesTableView: View {
     }
 
     private func appendRule() {
-        let rule = RoutingRule(profileDirectory: profiles.first?.directoryName ?? "")
+        let rule = RoutingRule(profileDirectory: profileManager.profiles.first?.directoryName ?? "")
         store.add(rule)
     }
 
@@ -72,7 +72,7 @@ struct RulesTableView: View {
             appendRule()
             return
         }
-        let rule = RoutingRule(profileDirectory: profiles.first?.directoryName ?? "")
+        let rule = RoutingRule(profileDirectory: profileManager.profiles.first?.directoryName ?? "")
         store.insert(rule, at: index + 1)
     }
 }
@@ -187,31 +187,28 @@ private struct RuleRow: View {
             SourcePattern(rule: rule, onChange: onChange)
         case .domain:
             PillTextField(
-                text: Binding(
-                    get: { rule.pattern },
-                    set: {
-                        var copy = rule
-                        copy.pattern = $0
-                        onChange(copy)
-                    }
-                ),
+                text: patternBinding,
                 monospaced: false,
                 isInvalid: !rule.pattern.isEmpty && !RuleEngine.isValidDomain(rule.pattern)
             )
         case .regex:
             PillTextField(
-                text: Binding(
-                    get: { rule.pattern },
-                    set: {
-                        var copy = rule
-                        copy.pattern = $0
-                        onChange(copy)
-                    }
-                ),
+                text: patternBinding,
                 monospaced: false,
                 isInvalid: !rule.pattern.isEmpty && !RuleEngine.isValidRegex(rule.pattern)
             )
         }
+    }
+
+    private var patternBinding: Binding<String> {
+        Binding(
+            get: { rule.pattern },
+            set: { newValue in
+                var copy = rule
+                copy.pattern = newValue
+                onChange(copy)
+            }
+        )
     }
 }
 

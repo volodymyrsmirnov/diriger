@@ -1,11 +1,53 @@
 import AppKit
-import ApplicationServices
+@preconcurrency import ApplicationServices
 
-struct ChromeLauncher {
-    static func openURL(_ url: URL, in profile: ChromeProfile) {
-        guard let chromeURL = ChromeProfileService.chromeURL() else { return }
-        let binaryURL = chromeURL
-            .appendingPathComponent("Contents/MacOS/Google Chrome")
+@MainActor
+enum ChromeLauncher {
+    static let chromeBundleID = "com.google.Chrome"
+
+    enum LaunchError: LocalizedError {
+        case chromeNotInstalled
+        case accessibilityDenied
+        case profilesMenuNotFound
+        case profileItemNotFound(displayName: String)
+        case chromeLaunchFailed(underlying: Error)
+
+        var errorDescription: String? {
+            switch self {
+            case .chromeNotInstalled:
+                return "Google Chrome is not installed."
+            case .accessibilityDenied:
+                return "Diriger needs Accessibility permission to switch Chrome profiles."
+            case .profilesMenuNotFound:
+                return "Couldn't find Chrome's Profiles menu."
+            case .profileItemNotFound(let name):
+                return "Couldn't find \"\(name)\" in Chrome's Profiles menu."
+            case .chromeLaunchFailed:
+                return "Failed to launch Google Chrome."
+            }
+        }
+
+        var recoverySuggestion: String? {
+            switch self {
+            case .chromeNotInstalled:
+                return "Install Google Chrome from google.com/chrome."
+            case .accessibilityDenied:
+                return "Grant permission in System Settings › Privacy & Security › Accessibility."
+            case .profilesMenuNotFound:
+                return "Diriger supports English-language Chrome only. Make sure Chrome is running and its menu bar uses English."
+            case .profileItemNotFound:
+                return "The profile may have been renamed or removed in Chrome. Use Refresh Profiles in the menu bar."
+            case .chromeLaunchFailed(let error):
+                return error.localizedDescription
+            }
+        }
+    }
+
+    static func openURL(_ url: URL, in profile: ChromeProfile) async throws {
+        guard let chromeURL = ChromeProfileService.chromeURL() else {
+            throw LaunchError.chromeNotInstalled
+        }
+        let binaryURL = chromeURL.appendingPathComponent("Contents/MacOS/Google Chrome")
 
         let process = Process()
         process.executableURL = binaryURL
@@ -15,64 +57,91 @@ struct ChromeLauncher {
         ]
         do {
             try process.run()
+            return
         } catch {
-            let config = NSWorkspace.OpenConfiguration()
-            config.arguments = ["--profile-directory=\(profile.directoryName)"]
-            NSWorkspace.shared.open([url], withApplicationAt: chromeURL, configuration: config)
+            Log.chrome.error("Direct Chrome spawn failed, falling back to NSWorkspace: \(error.localizedDescription, privacy: .public)")
+        }
+
+        let config = NSWorkspace.OpenConfiguration()
+        config.arguments = ["--profile-directory=\(profile.directoryName)"]
+        do {
+            _ = try await NSWorkspace.shared.open(
+                [url],
+                withApplicationAt: chromeURL,
+                configuration: config
+            )
+        } catch {
+            throw LaunchError.chromeLaunchFailed(underlying: error)
         }
     }
 
-    static func switchToProfile(_ profile: ChromeProfile) {
-        guard let chromeURL = ChromeProfileService.chromeURL() else { return }
+    static func switchToProfile(_ profile: ChromeProfile) async throws {
+        guard let chromeURL = ChromeProfileService.chromeURL() else {
+            throw LaunchError.chromeNotInstalled
+        }
 
         guard AXIsProcessTrusted() else {
             let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary
-            AXIsProcessTrustedWithOptions(options)
-            return
+            _ = AXIsProcessTrustedWithOptions(options)
+            throw LaunchError.accessibilityDenied
         }
 
         let chromeApp = NSWorkspace.shared.runningApplications.first {
-            $0.bundleIdentifier == "com.google.Chrome"
+            $0.bundleIdentifier == chromeBundleID
         }
 
-        if let chromeApp {
-            chromeApp.activate()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                selectProfileFromMenu(profile, pid: chromeApp.processIdentifier)
-            }
-        } else {
-            launchChrome(at: chromeURL, with: profile)
+        guard let chromeApp else {
+            try await launchChrome(at: chromeURL, profile: profile)
+            return
         }
+
+        chromeApp.activate()
+        try await selectProfileFromMenu(profile, pid: chromeApp.processIdentifier)
     }
 
-    private static func launchChrome(at chromeURL: URL, with profile: ChromeProfile) {
+    private static func launchChrome(at chromeURL: URL, profile: ChromeProfile) async throws {
         let config = NSWorkspace.OpenConfiguration()
         config.arguments = ["--profile-directory=\(profile.directoryName)"]
-        NSWorkspace.shared.openApplication(at: chromeURL, configuration: config)
+        do {
+            _ = try await NSWorkspace.shared.openApplication(at: chromeURL, configuration: config)
+        } catch {
+            throw LaunchError.chromeLaunchFailed(underlying: error)
+        }
     }
 
-    private static func selectProfileFromMenu(_ profile: ChromeProfile, pid: pid_t) {
+    private static func selectProfileFromMenu(_ profile: ChromeProfile, pid: pid_t) async throws {
         let app = AXUIElementCreateApplication(pid)
 
-        guard let menuBar = axAttribute(of: app, key: kAXMenuBarAttribute) as AXUIElement?,
-              let menuBarItems: [AXUIElement] = axAttribute(of: menuBar, key: kAXChildrenAttribute),
-              let profilesItem = menuBarItems.first(where: { axTitle(of: $0) == "Profiles" })
-        else { return }
+        let profilesItem = await AXPoll.wait { () -> AXUIElement? in
+            guard let menuBar: AXUIElement = axAttribute(of: app, key: kAXMenuBarAttribute),
+                  let items: [AXUIElement] = axAttribute(of: menuBar, key: kAXChildrenAttribute)
+            else { return nil }
+            return items.first { axTitle(of: $0) == "Profiles" }
+        }
+        guard let profilesItem else {
+            throw LaunchError.profilesMenuNotFound
+        }
 
         AXUIElementPerformAction(profilesItem, kAXPressAction as CFString)
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+        let targetItem = await AXPoll.wait { () -> AXUIElement? in
             guard let menus: [AXUIElement] = axAttribute(of: profilesItem, key: kAXChildrenAttribute),
                   let menu = menus.first,
                   let menuItems: [AXUIElement] = axAttribute(of: menu, key: kAXChildrenAttribute),
-                  let match = menuItems.first(where: { axTitle(of: $0)?.contains(profile.displayName) == true })
-            else { return }
-
-            AXUIElementPerformAction(match, kAXPressAction as CFString)
+                  !menuItems.isEmpty
+            else { return nil }
+            return menuItems.first { axTitle(of: $0)?.contains(profile.displayName) == true }
         }
+        guard let targetItem else {
+            // Dismiss the opened menu so we don't leave Chrome in a weird state.
+            AXUIElementPerformAction(profilesItem, kAXCancelAction as CFString)
+            throw LaunchError.profileItemNotFound(displayName: profile.displayName)
+        }
+
+        AXUIElementPerformAction(targetItem, kAXPressAction as CFString)
     }
 
-    // MARK: - Accessibility Helpers
+    // MARK: - Accessibility helpers
 
     private static func axAttribute<T>(of element: AXUIElement, key: String) -> T? {
         var ref: CFTypeRef?
