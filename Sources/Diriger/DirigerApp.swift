@@ -103,7 +103,7 @@ struct DirigerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        MenuBarExtra("Diriger", systemImage: "wand.and.rays") {
+        MenuBarExtra("Diriger", systemImage: "wand.and.outline") {
             MenuBarView(onRefresh: { appDelegate.profileManager.loadProfiles() })
                 .environment(appDelegate.profileManager)
         }
