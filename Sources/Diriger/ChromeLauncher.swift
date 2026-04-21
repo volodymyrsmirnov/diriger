@@ -8,7 +8,6 @@ enum ChromeLauncher {
     enum LaunchError: LocalizedError {
         case chromeNotInstalled
         case accessibilityDenied
-        case profilesMenuNotFound
         case profileItemNotFound(displayName: String)
         case chromeLaunchFailed(underlying: Error)
 
@@ -18,8 +17,6 @@ enum ChromeLauncher {
                 return "Google Chrome is not installed."
             case .accessibilityDenied:
                 return "Diriger needs Accessibility permission to switch Chrome profiles."
-            case .profilesMenuNotFound:
-                return "Couldn't find Chrome's Profiles menu."
             case .profileItemNotFound(let name):
                 return "Couldn't find \"\(name)\" in Chrome's Profiles menu."
             case .chromeLaunchFailed:
@@ -33,8 +30,6 @@ enum ChromeLauncher {
                 return "Install Google Chrome from google.com/chrome."
             case .accessibilityDenied:
                 return "Grant permission in System Settings › Privacy & Security › Accessibility."
-            case .profilesMenuNotFound:
-                return "Diriger supports English-language Chrome only. Make sure Chrome is running and its menu bar uses English."
             case .profileItemNotFound:
                 return "The profile may have been renamed or removed in Chrome. Use Refresh Profiles in the menu bar."
             case .chromeLaunchFailed(let error):
@@ -96,7 +91,7 @@ enum ChromeLauncher {
         }
 
         chromeApp.activate()
-        try await selectProfileFromMenu(profile, pid: chromeApp.processIdentifier)
+        try selectProfileFromMenu(profile, pid: chromeApp.processIdentifier)
     }
 
     private static func launchChrome(at chromeURL: URL, profile: ChromeProfile) async throws {
@@ -109,37 +104,38 @@ enum ChromeLauncher {
         }
     }
 
-    private static func selectProfileFromMenu(_ profile: ChromeProfile, pid: pid_t) async throws {
+    private static func selectProfileFromMenu(_ profile: ChromeProfile, pid: pid_t) throws {
         let app = AXUIElementCreateApplication(pid)
-
-        let profilesItem = await AXPoll.wait { () -> AXUIElement? in
-            guard let menuBar: AXUIElement = axAttribute(of: app, key: kAXMenuBarAttribute),
-                  let items: [AXUIElement] = axAttribute(of: menuBar, key: kAXChildrenAttribute)
-            else { return nil }
-            return items.first { axTitle(of: $0) == "Profiles" }
-        }
-        guard let profilesItem else {
-            throw LaunchError.profilesMenuNotFound
-        }
-
-        AXUIElementPerformAction(profilesItem, kAXPressAction as CFString)
-
-        let targetItem = await AXPoll.wait { () -> AXUIElement? in
-            guard let menus: [AXUIElement] = axAttribute(of: profilesItem, key: kAXChildrenAttribute),
-                  let menu = menus.first,
-                  let menuItems: [AXUIElement] = axAttribute(of: menu, key: kAXChildrenAttribute),
-                  !menuItems.isEmpty
-            else { return nil }
-            return menuItems.first { axTitle(of: $0)?.contains(profile.displayName) == true }
-        }
-        guard let targetItem else {
-            // Dismiss the opened menu so we don't leave Chrome in a weird state.
-            AXUIElementPerformAction(profilesItem, kAXCancelAction as CFString)
+        guard let menuBar: AXUIElement = axAttribute(of: app, key: kAXMenuBarAttribute) else {
             throw LaunchError.profileItemNotFound(displayName: profile.displayName)
         }
 
-        AXUIElementPerformAction(targetItem, kAXPressAction as CFString)
+        var target: AXUIElement?
+        walkMenuTree(menuBar) { element in
+            guard target == nil,
+                  axIdentifier(of: element) == profileMenuItemIdentifier,
+                  axTitle(of: element)?.contains(profile.displayName) == true
+            else { return }
+            target = element
+        }
+
+        guard let target else {
+            throw LaunchError.profileItemNotFound(displayName: profile.displayName)
+        }
+        AXUIElementPerformAction(target, kAXPressAction as CFString)
     }
+
+    private static func walkMenuTree(_ element: AXUIElement, visit: (AXUIElement) -> Void) {
+        visit(element)
+        guard let children: [AXUIElement] = axAttribute(of: element, key: kAXChildrenAttribute) else {
+            return
+        }
+        for child in children {
+            walkMenuTree(child, visit: visit)
+        }
+    }
+
+    private static let profileMenuItemIdentifier = "switchToProfileFromMenu:"
 
     // MARK: - Accessibility helpers
 
@@ -151,5 +147,9 @@ enum ChromeLauncher {
 
     private static func axTitle(of element: AXUIElement) -> String? {
         axAttribute(of: element, key: kAXTitleAttribute)
+    }
+
+    private static func axIdentifier(of element: AXUIElement) -> String? {
+        axAttribute(of: element, key: kAXIdentifierAttribute)
     }
 }
