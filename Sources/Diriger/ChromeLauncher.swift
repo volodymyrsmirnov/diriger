@@ -2,6 +2,26 @@ import AppKit
 import ApplicationServices
 
 struct ChromeLauncher {
+    static func openURL(_ url: URL, in profile: ChromeProfile) {
+        guard let chromeURL = ChromeProfileService.chromeURL() else { return }
+        let binaryURL = chromeURL
+            .appendingPathComponent("Contents/MacOS/Google Chrome")
+
+        let process = Process()
+        process.executableURL = binaryURL
+        process.arguments = [
+            "--profile-directory=\(profile.directoryName)",
+            url.absoluteString
+        ]
+        do {
+            try process.run()
+        } catch {
+            let config = NSWorkspace.OpenConfiguration()
+            config.arguments = ["--profile-directory=\(profile.directoryName)"]
+            NSWorkspace.shared.open([url], withApplicationAt: chromeURL, configuration: config)
+        }
+    }
+
     static func switchToProfile(_ profile: ChromeProfile) {
         guard let chromeURL = ChromeProfileService.chromeURL() else { return }
 

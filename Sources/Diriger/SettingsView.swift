@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import KeyboardShortcuts
 import ServiceManagement
 
@@ -8,6 +9,8 @@ struct SettingsView: View {
         let status = SMAppService.mainApp.status
         return status == .enabled || status == .requiresApproval
     }()
+    @State private var isDefaultBrowser = DefaultBrowserService.isDefaultBrowser()
+    @State private var currentBrowserName = DefaultBrowserService.currentHandlerDisplayName()
 
     var body: some View {
         Form {
@@ -40,6 +43,32 @@ struct SettingsView: View {
                 }
             }
 
+            Section("Default Browser") {
+                Toggle("Enable links selection", isOn: Binding(
+                    get: { isDefaultBrowser },
+                    set: { newValue in
+                        if newValue {
+                            DefaultBrowserService.register { _ in
+                                refreshDefaultBrowserState()
+                            }
+                        } else {
+                            DefaultBrowserService.unregister { _ in
+                                refreshDefaultBrowserState()
+                            }
+                        }
+                    }
+                ))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Current default: \(currentBrowserName ?? "Unknown")")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("Turning this off hands the default role back to another installed browser.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             Section("General") {
                 Toggle("Launch at Login", isOn: Binding(
                     get: { launchAtLogin },
@@ -60,11 +89,22 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 450, height: 400)
+        .frame(width: 450, height: 500)
         .onAppear {
             let status = SMAppService.mainApp.status
             launchAtLogin = status == .enabled || status == .requiresApproval
+            refreshDefaultBrowserState()
         }
+        .onReceive(NotificationCenter.default.publisher(
+            for: NSApplication.didBecomeActiveNotification
+        )) { _ in
+            refreshDefaultBrowserState()
+        }
+    }
+
+    private func refreshDefaultBrowserState() {
+        isDefaultBrowser = DefaultBrowserService.isDefaultBrowser()
+        currentBrowserName = DefaultBrowserService.currentHandlerDisplayName()
     }
 }
 
