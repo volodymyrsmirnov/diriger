@@ -57,11 +57,17 @@ extension ProfileIdentity {
     /// check — it returns the same string searched for when the profile exists,
     /// or `nil` when it doesn't.
     func directoryName(in profiles: [ChromeProfile]) -> String? {
+        profile(in: profiles)?.directoryName
+    }
+
+    /// Resolve this identity to the matching `ChromeProfile`, or `nil` if
+    /// no profile currently matches.
+    func profile(in profiles: [ChromeProfile]) -> ChromeProfile? {
         switch self {
         case .email(let value):
-            return profiles.first(where: { $0.email == value })?.directoryName
+            return profiles.first(where: { $0.email == value })
         case .directory(let value):
-            return profiles.first(where: { $0.directoryName == value })?.directoryName
+            return profiles.first(where: { $0.directoryName == value })
         }
     }
 }

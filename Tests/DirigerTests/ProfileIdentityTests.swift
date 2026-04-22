@@ -88,4 +88,33 @@ final class ProfileIdentityResolverTests: XCTestCase {
         let profiles = [profile("Default", "Guest")]
         XCTAssertNil(ProfileIdentity.directory("Missing").directoryName(in: profiles))
     }
+
+    // MARK: profile(in:)
+
+    func test_profileInReturnsMatchForEmailIdentity() {
+        let target = profile("Profile 2", "Work", "work@x.com")
+        let profiles = [profile("Profile 1", "Home", "home@x.com"), target]
+        XCTAssertEqual(ProfileIdentity.email("work@x.com").profile(in: profiles), target)
+    }
+
+    func test_profileInReturnsNilForUnknownEmail() {
+        let profiles = [profile("Profile 1", "Home", "home@x.com")]
+        XCTAssertNil(ProfileIdentity.email("other@x.com").profile(in: profiles))
+    }
+
+    func test_profileInReturnsMatchForDirectoryIdentity() {
+        let target = profile("Default", "Guest")
+        let profiles = [target, profile("Profile 1", "Home")]
+        XCTAssertEqual(ProfileIdentity.directory("Default").profile(in: profiles), target)
+    }
+
+    func test_profileInReturnsNilForUnknownDirectory() {
+        let profiles = [profile("Default", "Guest")]
+        XCTAssertNil(ProfileIdentity.directory("Missing").profile(in: profiles))
+    }
+
+    func test_profileInReturnsNilForEmptyProfileList() {
+        XCTAssertNil(ProfileIdentity.email("x@y.com").profile(in: []))
+        XCTAssertNil(ProfileIdentity.directory("Default").profile(in: []))
+    }
 }

@@ -6,11 +6,15 @@ final class RuleStore {
     static let defaultsKey = "routing_rules"
 
     private(set) var rules: [RoutingRule]
+    private let defaults: UserDefaults
+    private let sync: SyncedDefaults
     private var remoteObserver: NSObjectProtocol?
 
-    init() {
-        self.rules = Self.load()
-        SyncedDefaults.shared.register(.routingRules)
+    init(defaults: UserDefaults = .standard, sync: SyncedDefaults = .shared) {
+        self.defaults = defaults
+        self.sync = sync
+        self.rules = Self.load(from: defaults)
+        sync.register(.routingRules)
         remoteObserver = NotificationCenter.default.addObserver(
             forName: SyncedDefaults.keyDidChangeRemotelyNotification,
             object: nil,
@@ -52,22 +56,22 @@ final class RuleStore {
     }
 
     private func reloadFromDefaults() {
-        rules = Self.load()
+        rules = Self.load(from: defaults)
     }
 
     private func persist() {
         do {
             let data = try JSONEncoder().encode(rules)
-            UserDefaults.standard.set(data, forKey: Self.defaultsKey)
-            SyncedDefaults.shared.recordLocalWrite(.routingRules)
-            SyncedDefaults.shared.pushWrite(.routingRules)
+            defaults.set(data, forKey: Self.defaultsKey)
+            sync.recordLocalWrite(.routingRules)
+            sync.pushWrite(.routingRules)
         } catch {
             Log.rules.error("Failed to persist rules: \(error.localizedDescription, privacy: .public)")
         }
     }
 
-    private static func load() -> [RoutingRule] {
-        guard let data = UserDefaults.standard.data(forKey: defaultsKey) else { return [] }
+    private static func load(from defaults: UserDefaults) -> [RoutingRule] {
+        guard let data = defaults.data(forKey: defaultsKey) else { return [] }
         do {
             return try JSONDecoder().decode([RoutingRule].self, from: data)
         } catch {

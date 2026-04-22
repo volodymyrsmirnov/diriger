@@ -8,12 +8,8 @@ enum RuleEngine {
         availableProfiles: [ChromeProfile]
     ) -> ChromeProfile? {
         for rule in rules {
-            guard let directory = rule.profileIdentity.directoryName(in: availableProfiles),
-                  let profile = availableProfiles.first(where: { $0.directoryName == directory })
-            else { continue }
-
+            guard let profile = rule.profileIdentity.profile(in: availableProfiles) else { continue }
             guard matches(rule: rule, url: url, sourceBundleID: sourceBundleID) else { continue }
-
             return profile
         }
         return nil

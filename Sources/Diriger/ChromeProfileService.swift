@@ -13,7 +13,10 @@ enum ChromeProfileService {
     }
 
     nonisolated static func loadProfiles() async -> [ChromeProfile] {
-        let url = localStateURL
+        await loadProfiles(localStateURL: localStateURL)
+    }
+
+    nonisolated static func loadProfiles(localStateURL url: URL) async -> [ChromeProfile] {
         let data: Data
         do {
             data = try Data(contentsOf: url)
@@ -24,7 +27,12 @@ enum ChromeProfileService {
                 )
             return []
         }
+        return parseProfiles(from: data)
+    }
 
+    /// Parse a Chrome `Local State` JSON payload into `ChromeProfile` values.
+    /// Returns an empty array on any structural or parse error.
+    nonisolated static func parseProfiles(from data: Data) -> [ChromeProfile] {
         let infoCache: [String: Any]
         do {
             let parsed = try JSONSerialization.jsonObject(with: data)
