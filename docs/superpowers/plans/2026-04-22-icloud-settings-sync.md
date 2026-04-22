@@ -1980,28 +1980,31 @@ enum SyncMigration {
     }
 
     // MARK: - Shortcuts
+    //
+    // The shortcut rename is done by raw UserDefaults key renaming rather than going
+    // through the KeyboardShortcuts library API. Reason: the library always reads/writes
+    // UserDefaults.standard, so library calls can't be pointed at a test-injected
+    // UserDefaults suite. Key renaming preserves the library's on-disk format exactly,
+    // so the next `getShortcut` call picks up the value under the new key.
 
-    @MainActor
     private static func migrateShortcuts(defaults: UserDefaults, profiles: [ChromeProfile]) {
         let legacyPrefix = "KeyboardShortcuts_profile_"
-        let allKeys = defaults.dictionaryRepresentation().keys
-        for defaultsKey in allKeys where defaultsKey.hasPrefix(legacyPrefix)
-            && !defaultsKey.hasPrefix("KeyboardShortcuts_profile_shortcut_") {
-            let legacyName = String(defaultsKey.dropFirst("KeyboardShortcuts_".count))
-            let directoryName = String(legacyName.dropFirst("profile_".count))
-            let oldName = KeyboardShortcuts.Name(legacyName)
-            let shortcut = KeyboardShortcuts.getShortcut(for: oldName)
-
+        let newPrefix = "KeyboardShortcuts_profile_shortcut_"
+        for (defaultsKey, _) in defaults.dictionaryRepresentation()
+            where defaultsKey.hasPrefix(legacyPrefix) && !defaultsKey.hasPrefix(newPrefix) {
+            let directoryName = String(defaultsKey.dropFirst(legacyPrefix.count))
             let identity: ProfileIdentity
             if let match = profiles.first(where: { $0.directoryName == directoryName }), !match.email.isEmpty {
                 identity = .email(match.email)
             } else {
                 identity = .directory(directoryName)
             }
-            let newName = KeyboardShortcuts.Name.forProfile(identity)
+            let newDefaultsKey = "KeyboardShortcuts_\(KeyboardShortcuts.Name.forProfile(identity).rawValue)"
 
-            KeyboardShortcuts.setShortcut(shortcut, for: newName)
-            KeyboardShortcuts.reset([oldName])
+            if let value = defaults.object(forKey: defaultsKey) {
+                defaults.set(value, forKey: newDefaultsKey)
+            }
+            defaults.removeObject(forKey: defaultsKey)
         }
     }
 }
