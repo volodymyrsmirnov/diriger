@@ -27,3 +27,31 @@ protocol KVSBackend: AnyObject {
 }
 
 extension NSUbiquitousKeyValueStore: KVSBackend {}
+
+enum SyncedDefaults {
+    struct Entry: Equatable {
+        let value: Data
+        let mtime: Double
+    }
+
+    enum Decision: Equatable {
+        case pushLocalToCloud
+        case pullCloudToLocal
+        case noAction
+    }
+
+    static func reconcile(local: Entry?, cloud: Entry?) -> Decision {
+        switch (local, cloud) {
+        case (nil, nil):
+            return .noAction
+        case (_?, nil):
+            return .pushLocalToCloud
+        case (nil, _?):
+            return .pullCloudToLocal
+        case (let l?, let c?):
+            if l.mtime > c.mtime { return .pushLocalToCloud }
+            if c.mtime > l.mtime { return .pullCloudToLocal }
+            return .noAction
+        }
+    }
+}
