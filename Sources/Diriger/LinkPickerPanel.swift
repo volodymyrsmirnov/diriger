@@ -21,7 +21,11 @@ final class LinkPickerPanel: NSPanel {
         level = .popUpMenu
         isOpaque = false
         backgroundColor = .clear
-        hasShadow = true
+        if #available(macOS 26, *) {
+            hasShadow = false
+        } else {
+            hasShadow = true
+        }
         hidesOnDeactivate = false
         isMovableByWindowBackground = false
         collectionBehavior = [.canJoinAllSpaces, .transient, .fullScreenAuxiliary]
