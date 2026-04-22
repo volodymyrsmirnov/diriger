@@ -92,4 +92,29 @@ final class SyncMigrationTests: XCTestCase {
         let rules = try! JSONDecoder().decode([RoutingRule].self, from: defaults.data(forKey: RuleStore.defaultsKey)!)
         XCTAssertEqual(rules.first?.profileIdentity, .directory("Profile 1"))
     }
+
+    func test_migrationRewritesShortcutKeyFromDirectoryToEmail() {
+        let legacyKey = "KeyboardShortcuts_profile_Profile 1"
+        let payload = Data([0x01, 0x02, 0x03])
+        defaults.set(payload, forKey: legacyKey)
+        let profiles = [ChromeProfile(directoryName: "Profile 1", displayName: "Jane", email: "jane@x.com")]
+
+        SyncMigration.performMigration(defaults: defaults, profiles: profiles)
+
+        XCTAssertNil(defaults.object(forKey: legacyKey))
+        XCTAssertEqual(
+            defaults.data(forKey: "KeyboardShortcuts_profile_shortcut_email:jane@x.com"),
+            payload
+        )
+    }
+
+    func test_migrationLeavesAlreadyIdentityKeyedShortcutsAlone() {
+        let alreadyMigratedKey = "KeyboardShortcuts_profile_shortcut_email:already@x.com"
+        let payload = Data([0xAA, 0xBB])
+        defaults.set(payload, forKey: alreadyMigratedKey)
+
+        SyncMigration.performMigration(defaults: defaults, profiles: [])
+
+        XCTAssertEqual(defaults.data(forKey: alreadyMigratedKey), payload)
+    }
 }
