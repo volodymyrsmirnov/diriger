@@ -26,6 +26,8 @@ struct SettingsView: View {
     @State private var launchAtLoginError: String?
     @State private var browserState = DefaultBrowserState.read()
     @State private var axGranted = AXIsProcessTrusted()
+    @State private var syncEnabled = SyncedDefaults.shared.isEnabled
+    @State private var iCloudSignedIn = FileManager.default.ubiquityIdentityToken != nil
 
     var body: some View {
         Form {
@@ -39,13 +41,33 @@ struct SettingsView: View {
         .onAppear {
             launchAtLogin = SettingsView.readLaunchAtLogin()
             refreshDefaultBrowserState()
+            iCloudSignedIn = FileManager.default.ubiquityIdentityToken != nil
+            // Diriger is LSUIElement so `NSApplication.didBecomeActiveNotification`
+            // rarely fires; Settings-open is our deterministic pull-on-foreground trigger.
+            if syncEnabled {
+                SyncedDefaults.shared.reconcileAll()
+            }
         }
         .onReceive(NotificationCenter.default.publisher(
             for: NSApplication.didBecomeActiveNotification
         )) { _ in
             refreshDefaultBrowserState()
             axGranted = AXIsProcessTrusted()
+            iCloudSignedIn = FileManager.default.ubiquityIdentityToken != nil
         }
+    }
+
+    private var iCloudToggleBinding: Binding<Bool> {
+        Binding(
+            get: { syncEnabled && iCloudSignedIn },
+            set: { newValue in
+                // Never turn sync ON while iCloud is signed out — the write would
+                // silently no-op, and the UI would lie. We still honor OFF from any state.
+                let target = newValue && iCloudSignedIn
+                SyncedDefaults.shared.setEnabled(target)
+                syncEnabled = SyncedDefaults.shared.isEnabled
+            }
+        )
     }
 
     private var generalSection: some View {
@@ -55,6 +77,14 @@ struct SettingsView: View {
                 Text(launchAtLoginError)
                     .font(.caption)
                     .foregroundStyle(.red)
+            }
+
+            Toggle("Sync settings via iCloud", isOn: iCloudToggleBinding)
+                .disabled(!iCloudSignedIn)
+            if !iCloudSignedIn {
+                Text("Not signed into iCloud on this Mac. Sign in via System Settings to enable syncing.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             HStack {
@@ -71,6 +101,8 @@ struct SettingsView: View {
                     }
                 }
             }
+        } header: {
+            Text("General")
         }
     }
 
@@ -96,7 +128,7 @@ struct SettingsView: View {
 
                         Spacer()
 
-                        KeyboardShortcuts.Recorder(for: .forProfile(profile.directoryName))
+                        KeyboardShortcuts.Recorder(for: .forProfile(ProfileIdentity.forProfile(profile)))
                     }
                     .padding(.vertical, 2)
                 }

@@ -49,7 +49,7 @@ struct MenuBarView: View {
     }
 
     private func shortcutLabel(for profile: ChromeProfile) -> Text {
-        let name = KeyboardShortcuts.Name.forProfile(profile.directoryName)
+        let name = KeyboardShortcuts.Name.forProfile(ProfileIdentity.forProfile(profile))
         if let shortcut = KeyboardShortcuts.getShortcut(for: name) {
             return Text(shortcut.description)
         }

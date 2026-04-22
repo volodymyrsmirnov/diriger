@@ -8,28 +8,75 @@ final class ProfileManager {
     var profiles: [ChromeProfile] = []
 
     private let watcher: ChromeLocalStateWatcher
+    private var remoteObserver: NSObjectProtocol?
+    private var registeredShortcutKeys: Set<SyncedKey> = []
 
     init() {
         let watcher = ChromeLocalStateWatcher()
         self.watcher = watcher
-        // All stored properties are set; safe to capture self.
         watcher.onChange = { [weak self] in
             Task { @MainActor in await self?.loadProfiles() }
         }
         Task { await loadProfiles() }
         watcher.start()
+
+        remoteObserver = NotificationCenter.default.addObserver(
+            forName: SyncedDefaults.keyDidChangeRemotelyNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            let name = (note.userInfo?["key"] as? String) ?? ""
+            MainActor.assumeIsolated {
+                guard SyncedKey.isProfileShortcutKeyName(name) else { return }
+                // Precondition: SyncedDefaults.reconcile() writes the new value into
+                // UserDefaults BEFORE posting this notification, so registerShortcuts()
+                // re-reading from UserDefaults sees the fresh value.
+                self?.registerShortcuts()
+            }
+        }
     }
+
+    // No deinit cleanup: Swift 6 strict concurrency disallows touching @MainActor-isolated
+    // observer tokens from a nonisolated deinit, and this class is app-lifetime. The
+    // notification closure uses [weak self] so post-deallocation firings are no-ops.
 
     func loadProfiles() async {
         profiles = await ChromeProfileService.loadProfiles()
+        updateSyncedShortcutRegistrations()
         registerShortcuts()
+    }
+
+    private func updateSyncedShortcutRegistrations() {
+        let desired: Set<SyncedKey> = Set(
+            profiles.prefix(KeyboardShortcuts.Name.maxSlots).map { profile in
+                SyncedKey.profileShortcut(for: ProfileIdentity.forProfile(profile))
+            }
+        )
+
+        let added = desired.subtracting(registeredShortcutKeys)
+        for key in added {
+            SyncedDefaults.shared.register(key)
+            SyncedDefaults.shared.observeLibraryOwnedKey(key)
+        }
+        for key in registeredShortcutKeys.subtracting(desired) {
+            SyncedDefaults.shared.stopObservingLibraryOwnedKey(key)
+        }
+        registeredShortcutKeys = desired
+
+        // Shortcut keys are registered lazily after Chrome profiles load, which can
+        // happen AFTER SyncedDefaults.start() at launch. Trigger a reconcile now so
+        // newly-registered keys get their initial cloud pull. No-op when sync is off.
+        if !added.isEmpty {
+            SyncedDefaults.shared.reconcileAll()
+        }
     }
 
     private func registerShortcuts() {
         KeyboardShortcuts.removeAllHandlers()
 
         for profile in profiles.prefix(KeyboardShortcuts.Name.maxSlots) {
-            let name = KeyboardShortcuts.Name.forProfile(profile.directoryName)
+            let identity = ProfileIdentity.forProfile(profile)
+            let name = KeyboardShortcuts.Name.forProfile(identity)
             KeyboardShortcuts.onKeyUp(for: name) {
                 Task { @MainActor in
                     do {
@@ -51,6 +98,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let linkPicker: LinkPickerController
 
     override init() {
+        // Migration MUST run before RuleStore initializes — RuleStore caches rules
+        // from UserDefaults in memory at init, so any post-init migration would be
+        // overwritten by the first user edit.
+        SyncMigration.runIfNeeded()
         let pm = ProfileManager()
         self.profileManager = pm
         self.ruleStore = RuleStore()
@@ -66,6 +117,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 forEventClass: AEEventClass(kInternetEventClass),
                 andEventID: AEEventID(kAEGetURL)
             )
+            SyncedDefaults.shared.start()
         }
     }
 
