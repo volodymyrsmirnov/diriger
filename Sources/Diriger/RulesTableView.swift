@@ -88,8 +88,15 @@ private struct RuleRow: View {
     let onMoveUp: () -> Void
     let onMoveDown: () -> Void
 
+    private var isIdentityUnset: Bool {
+        switch rule.profileIdentity {
+        case .directory(let value): return value.isEmpty
+        case .email(let value): return value.isEmpty
+        }
+    }
+
     private var profileMissing: Bool {
-        rule.profileIdentity.directoryName(in: profiles) == nil
+        !isIdentityUnset && rule.profileIdentity.directoryName(in: profiles) == nil
     }
 
     var body: some View {
@@ -185,7 +192,7 @@ private struct RuleRow: View {
            let profile = profiles.first(where: { $0.directoryName == directory }) {
             return profile.displayName
         }
-        return "Missing"
+        return isIdentityUnset ? "Select profile" : "Missing"
     }
 
     @ViewBuilder

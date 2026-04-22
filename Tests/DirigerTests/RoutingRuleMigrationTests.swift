@@ -42,4 +42,15 @@ final class RoutingRuleMigrationTests: XCTestCase {
         let rule = try JSONDecoder().decode(RoutingRule.self, from: json)
         XCTAssertEqual(rule.profileIdentity, .directory(""))
     }
+
+    func test_decodePrefersProfileIdentityOverLegacyProfileDirectory() throws {
+        let json = Data("""
+        {"id":"3F2504E0-4F89-11D3-9A0C-0305E82C3301",
+         "kind":"domain","pattern":"github.com",
+         "profileIdentity":{"email":"jane@x.com"},
+         "profileDirectory":"Profile 999"}
+        """.utf8)
+        let rule = try JSONDecoder().decode(RoutingRule.self, from: json)
+        XCTAssertEqual(rule.profileIdentity, .email("jane@x.com"))
+    }
 }
