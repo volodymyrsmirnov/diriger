@@ -139,7 +139,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSRunningApplication(processIdentifier: pid_t($0))?.bundleIdentifier
         }
 
-        let bypassRules = NSEvent.modifierFlags.contains(.option)
+        let bypassRules = NSEvent.modifierFlags.contains(.shift)
         let matched = bypassRules ? nil : RuleEngine.firstMatch(
             in: ruleStore.rules,
             url: url,
