@@ -599,6 +599,7 @@ Future shortcut registrations will use identity-derived names. The old `profile_
 **Files:**
 - Modify: `Sources/Diriger/ShortcutNames.swift`
 - Modify: `Sources/Diriger/DirigerApp.swift` (call site in `ProfileManager.registerShortcuts`)
+- Modify: `Sources/Diriger/MenuBarView.swift` (`shortcutLabel(for:)` call site — same `.forProfile(ProfileIdentity.forProfile(profile))` replacement)
 
 - [ ] **Step 1: Replace `ShortcutNames.swift`**
 
