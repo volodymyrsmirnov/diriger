@@ -105,6 +105,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 forEventClass: AEEventClass(kInternetEventClass),
                 andEventID: AEEventID(kAEGetURL)
             )
+            Task { @MainActor in
+                await SyncMigration.runIfNeeded()
+            }
         }
     }
 
