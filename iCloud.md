@@ -50,6 +50,31 @@ That is the entire portal-side configuration required for KVS. There is no provi
 
 Open the App ID on the portal, click **Edit**, tick **iCloud**, and click **Save**. Do not click "Configure" — that is the CloudKit flow. Wait a minute or two for the change to propagate before signing a new build.
 
+## 2.5. Create a Developer ID Direct Distribution provisioning profile
+
+The KVS entitlement is "restricted": macOS won't honour it based on the signature alone. The `.app` bundle must also contain a provisioning profile that authorizes the bundle's Team ID + App ID for that entitlement. Without it, the app fails to launch with `launchd` error 163 ("Unknown error: 163 / Launchd job spawn failed") even though `codesign -d --entitlements -` shows the entitlement correctly embedded.
+
+1. Go to <https://developer.apple.com/account/resources/profiles/list>.
+2. Click the blue **+** to add a new profile.
+3. Under **Distribution**, select **Developer ID**, then **Continue**.
+4. Pick **Direct Distribution** (this is the Mac-specific flow that embeds a profile into a non-App-Store `.app`), then **Continue**.
+5. **App ID**: pick `tech.inkhorn.diriger`.
+6. **Certificates**: tick your **Developer ID Application** cert (the same one `scripts/build-app.sh` signs with — 3YS4G5GH27).
+7. **Provisioning Profile Name**: `Diriger Direct Distribution` (free-form; only shown on the portal).
+8. **Generate** → **Download**. You get a `.provisionprofile` file.
+9. Move/rename it to `Resources/Diriger.provisionprofile` inside this repo.
+10. Verify the profile contains the KVS entitlement:
+
+    ```bash
+    security cms -D -i Resources/Diriger.provisionprofile | plutil -p - | grep ubiquity
+    ```
+
+    Expected line: `"com.apple.developer.ubiquity-kvstore-identifier" => "3YS4G5GH27.*"`
+
+### 2.5.1 If the portal later complains the profile is invalid
+
+The profile ties the App ID, Team ID, and cert together. If any of them rotates (renewed cert, new Team member structure, etc.), regenerate the profile. The build script looks for the file at `Resources/Diriger.provisionprofile` by default; you can override with `PROVISION_PROFILE_PATH=...`.
+
 ## 3. Update the app's entitlements
 
 The app bundle must carry the `com.apple.developer.ubiquity-kvstore-identifier` entitlement, and its value must match the App ID you just registered, prefixed by your Team ID.
@@ -72,11 +97,13 @@ The value is `<Team ID>.<Bundle ID>` — hardcoded. The `$(TeamIdentifierPrefix)
 
 ## 4. Build and sign
 
-The existing `scripts/build-app.sh` already passes `--entitlements "$ENTITLEMENTS"` to `codesign`, so no script changes are required. Build as usual:
+`scripts/build-app.sh` copies `Resources/Diriger.provisionprofile` to `Diriger.app/Contents/embedded.provisionprofile` before signing, and passes `--entitlements "$ENTITLEMENTS"` to `codesign`. Build as usual:
 
 ```bash
 bash scripts/build-app.sh
 ```
+
+If the profile file is missing, the script prints a warning and still produces the signed bundle — but launching it will fail with `launchd` error 163 because the KVS entitlement won't be authorized.
 
 ## 5. Verify the signed build
 
@@ -105,7 +132,15 @@ codesign -dv Diriger.app 2>&1 | grep 'Authority='
 
 Expect three `Authority=` lines, the first one being `Developer ID Application: Volodymyr Smirnov (3YS4G5GH27)`. Ad-hoc (`-`) signing will not grant the entitlement — KVS will silently no-op at runtime.
 
-### 5.3 The app appears in iCloud's "Apps Using iCloud" list
+### 5.3 The embedded provisioning profile authorizes the entitlement
+
+```bash
+security cms -D -i Diriger.app/Contents/embedded.provisionprofile | plutil -p - | grep ubiquity
+```
+
+Expected: `"com.apple.developer.ubiquity-kvstore-identifier" => "3YS4G5GH27.*"`. If this file is missing or doesn't contain the KVS entitlement, macOS will block launch with error 163.
+
+### 5.4 The app appears in iCloud's "Apps Using iCloud" list
 
 After the first successful KVS read or write (i.e., after enabling the "Sync settings via iCloud" toggle in Diriger with at least one rule present), open **System Settings → Apple ID → iCloud → Apps Using iCloud**. Diriger should appear with a toggle. This is the user-facing confirmation that the entitlement is granted and iCloud accepted the app.
 
@@ -119,6 +154,9 @@ If Diriger does not appear after a minute or two of having sync enabled with rul
 Diriger is distributed via Homebrew, which means the `.dmg` is notarized and stapled after signing. The notary service **accepts** Developer ID-signed apps with the iCloud KVS entitlement — there is no additional entitlement allow-listing step required. If notarization begins failing after the iCloud change, the failure log from `xcrun notarytool log` will name the exact cause; the most common mistake is leaving the entitlement file empty on one of the `codesign` invocations (the script signs twice — binary and bundle — both must use the same entitlements file).
 
 ## 7. Troubleshooting
+
+**App fails to launch with "Launch failed. / Launchd job spawn failed / POSIX error 163".**
+- The KVS entitlement requires an embedded provisioning profile. Check `Diriger.app/Contents/embedded.provisionprofile` exists; if not, see section 2.5. If it exists but launch still fails, regenerate the profile (it may have expired or been revoked after a cert change).
 
 **"Sync settings via iCloud" toggle turns on but nothing syncs.**
 - Check `FileManager.default.ubiquityIdentityToken`: if `nil`, the user is not signed into iCloud. Diriger shows this in Settings.

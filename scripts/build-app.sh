@@ -6,6 +6,7 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 APP_NAME="Diriger"
 APP_BUNDLE="$PROJECT_DIR/$APP_NAME.app"
 ENTITLEMENTS="${ENTITLEMENTS_PATH:-$PROJECT_DIR/Resources/Diriger.entitlements}"
+PROVISION_PROFILE="${PROVISION_PROFILE_PATH:-$PROJECT_DIR/Resources/Diriger.provisionprofile}"
 APP_VERSION="${APP_VERSION:-}"
 
 echo "Building $APP_NAME..."
@@ -47,6 +48,16 @@ if [ -n "${SIGNING_IDENTITY:-}" ]; then
     IDENTITY="$SIGNING_IDENTITY"
 else
     IDENTITY=$(security find-identity -v -p codesigning | head -1 | sed 's/.*"\(.*\)".*/\1/')
+fi
+
+# Embed the provisioning profile so restricted entitlements (iCloud KVS, etc.)
+# are authorized at launch. Without this, a signed-and-entitled app fails to spawn
+# with launchd error 163.
+if [ -f "$PROVISION_PROFILE" ]; then
+    echo "Embedding provisioning profile..."
+    cp "$PROVISION_PROFILE" "$APP_BUNDLE/Contents/embedded.provisionprofile"
+else
+    echo "  Warning: No provisioning profile at $PROVISION_PROFILE — iCloud-entitled builds will fail to launch."
 fi
 
 echo "Signing app bundle..."
