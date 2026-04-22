@@ -46,7 +46,9 @@ enum RuleEngine {
         }
 
         guard !pattern.contains("*") else { return false }
-        return host == pattern
+        if host == pattern { return true }
+        if !pattern.hasPrefix("www."), host == "www." + pattern { return true }
+        return false
     }
 
     private static func regexMatches(pattern: String, url: URL) -> Bool {
