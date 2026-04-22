@@ -76,6 +76,13 @@ struct SettingsView: View {
                     .foregroundStyle(.red)
             }
 
+            Toggle("Sync settings via iCloud", isOn: iCloudToggleBinding)
+            if syncEnabled, !iCloudSignedIn {
+                Text("Not signed into iCloud on this Mac. Sign in via System Settings to start syncing.")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+
             HStack {
                 Text("Accessibility permission")
                 Spacer()
@@ -89,13 +96,6 @@ struct SettingsView: View {
                         AccessibilityPermission.openSystemSettings()
                     }
                 }
-            }
-
-            Toggle("Sync settings via iCloud", isOn: iCloudToggleBinding)
-            if syncEnabled, !iCloudSignedIn {
-                Text("Not signed into iCloud on this Mac. Sign in via System Settings to start syncing.")
-                    .font(.caption)
-                    .foregroundStyle(.red)
             }
         } header: {
             Text("General")
