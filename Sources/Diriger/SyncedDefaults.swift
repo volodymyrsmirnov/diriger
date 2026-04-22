@@ -9,10 +9,16 @@ struct SyncedKey: Hashable, Sendable {
 
     static let routingRules = SyncedKey(name: "routing_rules", ownedByApp: true)
 
+    fileprivate static let profileShortcutKeyNamePrefix = "KeyboardShortcuts_profile_shortcut_"
+
     static func profileShortcut(for identity: ProfileIdentity) -> SyncedKey {
         let shortcutName = KeyboardShortcuts.Name.forProfile(identity).rawValue
         // Matches KeyboardShortcuts library's internal UserDefaults key format: "KeyboardShortcuts_<name>".
         return SyncedKey(name: "KeyboardShortcuts_\(shortcutName)", ownedByApp: false)
+    }
+
+    static func isProfileShortcutKeyName(_ name: String) -> Bool {
+        name.hasPrefix(profileShortcutKeyNamePrefix)
     }
 }
 

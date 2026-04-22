@@ -27,7 +27,10 @@ final class ProfileManager {
         ) { [weak self] note in
             let name = (note.userInfo?["key"] as? String) ?? ""
             MainActor.assumeIsolated {
-                guard name.hasPrefix("KeyboardShortcuts_profile_shortcut_") else { return }
+                guard SyncedKey.isProfileShortcutKeyName(name) else { return }
+                // Precondition: SyncedDefaults.reconcile() writes the new value into
+                // UserDefaults BEFORE posting this notification, so registerShortcuts()
+                // re-reading from UserDefaults sees the fresh value.
                 self?.registerShortcuts()
             }
         }
