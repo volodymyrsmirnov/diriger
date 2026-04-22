@@ -53,7 +53,8 @@ final class ProfileManager {
             }
         )
 
-        for key in desired.subtracting(registeredShortcutKeys) {
+        let added = desired.subtracting(registeredShortcutKeys)
+        for key in added {
             SyncedDefaults.shared.register(key)
             SyncedDefaults.shared.observeLibraryOwnedKey(key)
         }
@@ -61,6 +62,13 @@ final class ProfileManager {
             SyncedDefaults.shared.stopObservingLibraryOwnedKey(key)
         }
         registeredShortcutKeys = desired
+
+        // Shortcut keys are registered lazily after Chrome profiles load, which can
+        // happen AFTER SyncedDefaults.start() at launch. Trigger a reconcile now so
+        // newly-registered keys get their initial cloud pull. No-op when sync is off.
+        if !added.isEmpty {
+            SyncedDefaults.shared.reconcileAll()
+        }
     }
 
     private func registerShortcuts() {

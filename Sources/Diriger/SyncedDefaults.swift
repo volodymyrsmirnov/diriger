@@ -244,7 +244,11 @@ final class SyncedDefaults {
     }
 
     private func write(entry: Entry, to defaults: UserDefaults, key: SyncedKey) {
-        if !key.ownedByApp {
+        // Suppress the KVO echo for library-owned keys ONLY when the write is going
+        // to change the stored value — otherwise UserDefaults may not fire KVO at
+        // all (equal-value writes are commonly filtered), leaving the flag stale
+        // and silently swallowing the user's next genuine edit.
+        if !key.ownedByApp, defaults.data(forKey: key.name) != entry.value {
             suppressKVOFor.insert(key.name)
         }
         defaults.set(entry.value, forKey: key.name)
