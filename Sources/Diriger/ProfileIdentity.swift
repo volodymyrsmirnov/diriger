@@ -43,3 +43,21 @@ enum ProfileIdentity: Hashable, Codable, Sendable {
         }
     }
 }
+
+extension ProfileIdentity {
+    static func forProfile(_ profile: ChromeProfile) -> ProfileIdentity {
+        if !profile.email.isEmpty {
+            return .email(profile.email)
+        }
+        return .directory(profile.directoryName)
+    }
+
+    func directoryName(in profiles: [ChromeProfile]) -> String? {
+        switch self {
+        case .email(let value):
+            return profiles.first(where: { $0.email == value })?.directoryName
+        case .directory(let value):
+            return profiles.first(where: { $0.directoryName == value })?.directoryName
+        }
+    }
+}

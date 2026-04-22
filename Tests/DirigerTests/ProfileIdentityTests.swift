@@ -44,3 +44,48 @@ final class ProfileIdentityTests: XCTestCase {
         XCTAssertEqual(decoded, .email("a@b.com"))
     }
 }
+
+final class ProfileIdentityResolverTests: XCTestCase {
+    private func profile(_ dir: String, _ display: String, _ email: String = "") -> ChromeProfile {
+        ChromeProfile(directoryName: dir, displayName: display, email: email)
+    }
+
+    func test_identityForProfilePrefersEmail() {
+        let p = profile("Profile 1", "Jane", "jane@x.com")
+        XCTAssertEqual(ProfileIdentity.forProfile(p), .email("jane@x.com"))
+    }
+
+    func test_identityForProfileFallsBackToDirectory() {
+        let p = profile("Default", "Guest")
+        XCTAssertEqual(ProfileIdentity.forProfile(p), .directory("Default"))
+    }
+
+    func test_resolveEmailToLocalDirectory() {
+        let profiles = [
+            profile("Profile 2", "Work", "work@x.com"),
+            profile("Profile 1", "Home", "home@x.com")
+        ]
+        XCTAssertEqual(
+            ProfileIdentity.email("work@x.com").directoryName(in: profiles),
+            "Profile 2"
+        )
+    }
+
+    func test_resolveEmailReturnsNilWhenNotPresent() {
+        let profiles = [profile("Profile 1", "Home", "home@x.com")]
+        XCTAssertNil(ProfileIdentity.email("other@x.com").directoryName(in: profiles))
+    }
+
+    func test_resolveDirectoryReturnsDirectoryWhenProfilePresent() {
+        let profiles = [profile("Default", "Guest")]
+        XCTAssertEqual(
+            ProfileIdentity.directory("Default").directoryName(in: profiles),
+            "Default"
+        )
+    }
+
+    func test_resolveDirectoryReturnsNilWhenProfileAbsent() {
+        let profiles = [profile("Default", "Guest")]
+        XCTAssertNil(ProfileIdentity.directory("Missing").directoryName(in: profiles))
+    }
+}
