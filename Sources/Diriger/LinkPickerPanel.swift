@@ -126,6 +126,17 @@ struct LinkPickerView: View {
                 .padding(.vertical, 10)
         }
         .frame(width: LinkPickerView.panelWidth, alignment: .leading)
+        .modifier(LiquidGlassBackground())
+    }
+}
+
+private struct LiquidGlassBackground: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 26, *) {
+            content.glassEffect(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        } else {
+            content
+        }
     }
 }
 

@@ -48,27 +48,36 @@ final class LinkPickerController {
         if let existing = panel { return existing }
         let panel = LinkPickerPanel()
 
-        let visual = NSVisualEffectView()
-        visual.material = .hudWindow
-        visual.blendingMode = .behindWindow
-        visual.state = .active
-        visual.wantsLayer = true
-        visual.layer?.cornerRadius = 16
-        visual.layer?.masksToBounds = true
-        visual.autoresizingMask = [.width, .height]
-        panel.contentView = visual
+        let container: NSView
+        if #available(macOS 26, *) {
+            let plain = NSView()
+            plain.wantsLayer = true
+            plain.autoresizingMask = [.width, .height]
+            container = plain
+        } else {
+            let visual = NSVisualEffectView()
+            visual.material = .hudWindow
+            visual.blendingMode = .behindWindow
+            visual.state = .active
+            visual.wantsLayer = true
+            visual.layer?.cornerRadius = 16
+            visual.layer?.masksToBounds = true
+            visual.autoresizingMask = [.width, .height]
+            container = visual
+        }
+        panel.contentView = container
 
         let hosting = NSHostingView(rootView: PickerRoot(
             state: state,
             activate: { [weak self] index in self?.activate(index: index) }
         ))
         hosting.translatesAutoresizingMaskIntoConstraints = false
-        visual.addSubview(hosting)
+        container.addSubview(hosting)
         NSLayoutConstraint.activate([
-            hosting.topAnchor.constraint(equalTo: visual.topAnchor),
-            hosting.bottomAnchor.constraint(equalTo: visual.bottomAnchor),
-            hosting.leadingAnchor.constraint(equalTo: visual.leadingAnchor),
-            hosting.trailingAnchor.constraint(equalTo: visual.trailingAnchor)
+            hosting.topAnchor.constraint(equalTo: container.topAnchor),
+            hosting.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            hosting.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            hosting.trailingAnchor.constraint(equalTo: container.trailingAnchor)
         ])
         hostingView = hosting
 
