@@ -37,4 +37,10 @@ final class ProfileIdentityTests: XCTestCase {
             ProfileIdentity.directory("a@b.com").storageKey
         )
     }
+
+    func test_decodePrefersEmailWhenBothKeysPresent() throws {
+        let json = Data(#"{"email":"a@b.com","directory":"Profile 1"}"#.utf8)
+        let decoded = try JSONDecoder().decode(ProfileIdentity.self, from: json)
+        XCTAssertEqual(decoded, .email("a@b.com"))
+    }
 }

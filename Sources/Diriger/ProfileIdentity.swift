@@ -11,6 +11,7 @@ enum ProfileIdentity: Hashable, Codable, Sendable {
 
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        // email takes precedence when both keys are present
         if let value = try container.decodeIfPresent(String.self, forKey: .email) {
             self = .email(value)
             return
