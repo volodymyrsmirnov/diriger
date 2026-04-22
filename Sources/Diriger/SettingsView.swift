@@ -30,20 +30,14 @@ struct SettingsView: View {
     @State private var iCloudSignedIn = FileManager.default.ubiquityIdentityToken != nil
 
     var body: some View {
-        VStack(spacing: 0) {
-            Form {
-                generalSection
-                profileShortcutsSection
-                defaultBrowserSection
-                rulesSection
-            }
-            .formStyle(.grouped)
-
-            Text("Version \(AppInfo.version)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.bottom, 12)
+        Form {
+            generalSection
+            profileShortcutsSection
+            defaultBrowserSection
+            rulesSection
+            versionFooter
         }
+        .formStyle(.grouped)
         .frame(width: 760, height: 720)
         .onAppear {
             launchAtLogin = SettingsView.readLaunchAtLogin()
@@ -179,6 +173,20 @@ struct SettingsView: View {
             .disabled(!browserState.isDefault)
         } header: {
             Text("Routing Rules")
+        }
+    }
+
+    private var versionFooter: some View {
+        Section {
+            HStack {
+                Spacer()
+                Text("Version \(AppInfo.version)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets())
         }
     }
 
