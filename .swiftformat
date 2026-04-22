@@ -1,0 +1,13 @@
+--indent 4
+--maxwidth 120
+--commas inline
+--wraparguments before-first
+--wrapparameters before-first
+--wrapcollections before-first
+--closingparen balanced
+--trimwhitespace always
+--semicolons never
+--self remove
+--stripunusedargs closure-only
+--swiftversion 6.0
+--disable redundantReturn,redundantSelf,sortImports

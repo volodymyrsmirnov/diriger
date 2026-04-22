@@ -22,6 +22,15 @@ A lightweight macOS menu bar app for working with multiple Google Chrome profile
 - Google Chrome (English-language menu bar; see *Limitations* below)
 - Accessibility permission (prompted on first profile switch — needed to click Chrome's Profiles menu)
 
+## Development
+
+Install SwiftFormat via Homebrew, then run it from the repo root to apply the project style:
+
+```bash
+brew install swiftformat
+swiftformat .
+```
+
 ## Installation
 
 ### Homebrew

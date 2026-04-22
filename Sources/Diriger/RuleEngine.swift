@@ -1,6 +1,6 @@
 import Foundation
 
-struct RuleEngine {
+enum RuleEngine {
     static func firstMatch(
         in rules: [RoutingRule],
         url: URL,

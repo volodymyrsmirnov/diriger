@@ -3,8 +3,6 @@ import AppKit
 import KeyboardShortcuts
 
 struct MenuBarView: View {
-    let onRefresh: () -> Void
-
     @Environment(ProfileManager.self) private var profileManager
     @Environment(\.openSettings) private var openSettings
 
@@ -35,8 +33,6 @@ struct MenuBarView: View {
         }
 
         Divider()
-
-        Button("Refresh Profiles", action: onRefresh)
 
         Button("Settings...") {
             openSettings()

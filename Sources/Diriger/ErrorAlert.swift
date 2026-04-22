@@ -1,6 +1,15 @@
 import AppKit
 
 @MainActor
+enum AccessibilityPermission {
+    static func openSystemSettings() {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+        else { return }
+        NSWorkspace.shared.open(url)
+    }
+}
+
+@MainActor
 enum ErrorAlert {
     static func present(_ error: Error) {
         let alert = NSAlert()
@@ -20,18 +29,12 @@ enum ErrorAlert {
             alert.addButton(withTitle: "Open System Settings")
             alert.addButton(withTitle: "Cancel")
             if alert.runModal() == .alertFirstButtonReturn {
-                openAccessibilitySettings()
+                AccessibilityPermission.openSystemSettings()
             }
             return
         }
 
         alert.addButton(withTitle: "OK")
         alert.runModal()
-    }
-
-    private static func openAccessibilitySettings() {
-        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
-        else { return }
-        NSWorkspace.shared.open(url)
     }
 }

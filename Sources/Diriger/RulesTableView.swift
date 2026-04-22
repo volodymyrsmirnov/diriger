@@ -105,22 +105,30 @@ private struct RuleRow: View {
                 .frame(width: profileWidth)
 
             HStack(spacing: 4) {
-                actionButton(systemName: "arrow.up.circle.fill",
-                             help: "Move up",
-                             enabled: canMoveUp,
-                             action: onMoveUp)
-                actionButton(systemName: "arrow.down.circle.fill",
-                             help: "Move down",
-                             enabled: canMoveDown,
-                             action: onMoveDown)
-                actionButton(systemName: "minus.circle.fill",
-                             help: "Remove rule",
-                             enabled: true,
-                             action: onRemove)
-                actionButton(systemName: "plus.circle.fill",
-                             help: "Add rule below",
-                             enabled: true,
-                             action: onAddAfter)
+                actionButton(
+                    systemName: "arrow.up.circle.fill",
+                    help: "Move up",
+                    enabled: canMoveUp,
+                    action: onMoveUp
+                )
+                actionButton(
+                    systemName: "arrow.down.circle.fill",
+                    help: "Move down",
+                    enabled: canMoveDown,
+                    action: onMoveDown
+                )
+                actionButton(
+                    systemName: "minus.circle.fill",
+                    help: "Remove rule",
+                    enabled: true,
+                    action: onRemove
+                )
+                actionButton(
+                    systemName: "plus.circle.fill",
+                    help: "Add rule below",
+                    enabled: true,
+                    action: onAddAfter
+                )
             }
         }
         .padding(.vertical, 2)
@@ -188,13 +196,11 @@ private struct RuleRow: View {
         case .domain:
             PillTextField(
                 text: patternBinding,
-                monospaced: false,
                 isInvalid: !rule.pattern.isEmpty && !RuleEngine.isValidDomain(rule.pattern)
             )
         case .regex:
             PillTextField(
                 text: patternBinding,
-                monospaced: false,
                 isInvalid: !rule.pattern.isEmpty && !RuleEngine.isValidRegex(rule.pattern)
             )
         }
@@ -251,7 +257,6 @@ private struct PillMenu: View {
 
 private struct PillTextField: View {
     @Binding var text: String
-    let monospaced: Bool
     let isInvalid: Bool
 
     @State private var isFocused: Bool = false
@@ -259,7 +264,6 @@ private struct PillTextField: View {
     var body: some View {
         EditableField(
             text: $text,
-            monospaced: monospaced,
             isFocused: $isFocused
         )
         .frame(maxWidth: .infinity, minHeight: pillHeight)
@@ -313,7 +317,8 @@ private struct SourcePattern: View {
     @ViewBuilder
     private var appIcon: some View {
         if !rule.pattern.isEmpty,
-           let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: rule.pattern) {
+           let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: rule.pattern)
+        {
             Image(nsImage: NSWorkspace.shared.icon(forFile: appURL.path))
                 .resizable()
         } else {
@@ -334,8 +339,7 @@ private struct SourcePattern: View {
             guard let bundle = Bundle(url: url), let id = bundle.bundleIdentifier else { return }
             var copy = rule
             copy.pattern = id
-            let name = FileManager.default.displayName(atPath: url.path)
-            copy.sourceName = name.hasSuffix(".app") ? String(name.dropLast(4)) : name
+            copy.sourceName = FileManager.default.appDisplayName(atPath: url.path)
             onChange(copy)
         }
     }
@@ -368,7 +372,7 @@ private var pillFillColor: Color {
 }
 
 private var pillFocusedFillColor: Color {
-    Color.black.opacity(0.35)
+    Color(nsColor: .selectedContentBackgroundColor).opacity(0.25)
 }
 
 private var pillBorderColor: Color {
@@ -439,7 +443,6 @@ private final class PaddedTextField: NSTextField {
 
 private struct EditableField: NSViewRepresentable {
     @Binding var text: String
-    let monospaced: Bool
     @Binding var isFocused: Bool
 
     func makeNSView(context: Context) -> NSTextField {
@@ -470,9 +473,7 @@ private struct EditableField: NSViewRepresentable {
     }
 
     private func applyFont(to field: NSTextField) {
-        let font: NSFont = monospaced
-            ? .monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
-            : .systemFont(ofSize: NSFont.systemFontSize)
+        let font: NSFont = .systemFont(ofSize: NSFont.systemFontSize)
         if field.font != font {
             field.font = font
         }
@@ -482,6 +483,7 @@ private struct EditableField: NSViewRepresentable {
         Coordinator(binding: $text, focusBinding: $isFocused)
     }
 
+    @MainActor
     final class Coordinator: NSObject, NSTextFieldDelegate {
         var binding: Binding<String>
         var focusBinding: Binding<Bool>
@@ -497,11 +499,11 @@ private struct EditableField: NSViewRepresentable {
         }
 
         func controlTextDidBeginEditing(_ obj: Notification) {
-            DispatchQueue.main.async { self.focusBinding.wrappedValue = true }
+            Task { @MainActor in self.focusBinding.wrappedValue = true }
         }
 
         func controlTextDidEndEditing(_ obj: Notification) {
-            DispatchQueue.main.async { self.focusBinding.wrappedValue = false }
+            Task { @MainActor in self.focusBinding.wrappedValue = false }
         }
     }
 }

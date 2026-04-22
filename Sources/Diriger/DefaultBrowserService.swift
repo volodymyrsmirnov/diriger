@@ -8,12 +8,8 @@ enum DefaultBrowserService {
     private static let writeScheme = "http"
     private static let probeURL = URL(string: "https://example.com")!
 
-    private static var bundleID: String {
-        Bundle.main.bundleIdentifier ?? "tech.inkhorn.diriger"
-    }
-
     static func isDefaultBrowser() -> Bool {
-        currentHandlerBundleID() == bundleID
+        currentHandlerBundleID() == AppInfo.bundleID
     }
 
     static func currentHandlerURL() -> URL? {
@@ -27,8 +23,7 @@ enum DefaultBrowserService {
 
     static func currentHandlerDisplayName() -> String? {
         guard let url = currentHandlerURL() else { return nil }
-        let name = FileManager.default.displayName(atPath: url.path)
-        return name.hasSuffix(".app") ? String(name.dropLast(4)) : name
+        return FileManager.default.appDisplayName(atPath: url.path)
     }
 
     static func register() async throws {
@@ -67,7 +62,7 @@ enum DefaultBrowserService {
         let handlers = NSWorkspace.shared.urlsForApplications(toOpen: probeURL)
         return handlers.first { url in
             guard let id = Bundle(url: url)?.bundleIdentifier else { return false }
-            return id != bundleID
+            return id != AppInfo.bundleID
         }
     }
 }

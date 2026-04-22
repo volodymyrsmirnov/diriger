@@ -52,7 +52,10 @@ final class RuleStore {
         do {
             return try JSONDecoder().decode([RoutingRule].self, from: data)
         } catch {
-            Log.rules.error("Failed to decode persisted rules; starting empty: \(error.localizedDescription, privacy: .public)")
+            Log.rules
+                .error(
+                    "Failed to decode persisted rules; starting empty: \(error.localizedDescription, privacy: .public)"
+                )
             return []
         }
     }

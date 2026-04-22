@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import SwiftUI
 
 final class LinkPickerPanel: NSPanel {
@@ -26,25 +27,36 @@ final class LinkPickerPanel: NSPanel {
         collectionBehavior = [.canJoinAllSpaces, .transient, .fullScreenAuxiliary]
     }
 
-    override var canBecomeKey: Bool { true }
-    override var canBecomeMain: Bool { false }
-    override var acceptsFirstResponder: Bool { true }
+    override var canBecomeKey: Bool {
+        true
+    }
+
+    override var canBecomeMain: Bool {
+        false
+    }
+
+    override var acceptsFirstResponder: Bool {
+        true
+    }
 
     override func keyDown(with event: NSEvent) {
         let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         let cmd = mods.contains(.command)
 
-        switch event.keyCode {
-        case 53:
+        // Carbon for Esc — NSEvent.SpecialKey doesn't cover it
+        if event.keyCode == UInt16(kVK_Escape) {
             onCancel?()
             return
-        case 36, 76:
+        }
+
+        switch event.specialKey {
+        case .carriageReturn, .enter:
             onCommit?()
             return
-        case 123, 126:
+        case .leftArrow, .upArrow:
             onSelectPrev?()
             return
-        case 124, 125:
+        case .rightArrow, .downArrow:
             onSelectNext?()
             return
         default:
@@ -60,7 +72,8 @@ final class LinkPickerPanel: NSPanel {
            let chars = event.charactersIgnoringModifiers,
            chars.count == 1,
            let scalar = chars.unicodeScalars.first,
-           let digit = Int(String(scalar)) {
+           let digit = Int(String(scalar))
+        {
             let index = digit == 0 ? 9 : digit - 1
             onSelectIndex?(index)
             return
@@ -123,7 +136,7 @@ struct ProfileRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            ProfileAvatar(profile: profile, shape: .roundedRect(cornerRadius: 7), size: 32)
+            ProfileAvatar(profile: profile, cornerRadius: 7, size: 32)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(profile.displayName)

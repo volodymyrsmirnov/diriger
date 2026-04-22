@@ -17,7 +17,7 @@ enum ChromeLauncher {
                 return "Google Chrome is not installed."
             case .accessibilityDenied:
                 return "Diriger needs Accessibility permission to switch Chrome profiles."
-            case .profileItemNotFound(let name):
+            case let .profileItemNotFound(name):
                 return "Couldn't find \"\(name)\" in Chrome's Profiles menu."
             case .chromeLaunchFailed:
                 return "Failed to launch Google Chrome."
@@ -31,8 +31,8 @@ enum ChromeLauncher {
             case .accessibilityDenied:
                 return "Grant permission in System Settings › Privacy & Security › Accessibility."
             case .profileItemNotFound:
-                return "The profile may have been renamed or removed in Chrome. Use Refresh Profiles in the menu bar."
-            case .chromeLaunchFailed(let error):
+                return "The profile may have been renamed or removed in Chrome. The profile list updates automatically when Chrome changes."
+            case let .chromeLaunchFailed(error):
                 return error.localizedDescription
             }
         }
@@ -54,7 +54,10 @@ enum ChromeLauncher {
             try process.run()
             return
         } catch {
-            Log.chrome.error("Direct Chrome spawn failed, falling back to NSWorkspace: \(error.localizedDescription, privacy: .public)")
+            Log.chrome
+                .error(
+                    "Direct Chrome spawn failed, falling back to NSWorkspace: \(error.localizedDescription, privacy: .public)"
+                )
         }
 
         let config = NSWorkspace.OpenConfiguration()

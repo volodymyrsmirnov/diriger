@@ -1,7 +1,22 @@
 import SwiftUI
 import AppKit
+import ApplicationServices
 import KeyboardShortcuts
 import ServiceManagement
+
+private struct DefaultBrowserState {
+    var isDefault: Bool
+    var currentName: String?
+    var error: String?
+
+    static func read() -> Self {
+        Self(
+            isDefault: DefaultBrowserService.isDefaultBrowser(),
+            currentName: DefaultBrowserService.currentHandlerDisplayName(),
+            error: nil
+        )
+    }
+}
 
 struct SettingsView: View {
     @Environment(ProfileManager.self) private var profileManager
@@ -9,13 +24,12 @@ struct SettingsView: View {
 
     @State private var launchAtLogin = SettingsView.readLaunchAtLogin()
     @State private var launchAtLoginError: String?
-    @State private var isDefaultBrowser = DefaultBrowserService.isDefaultBrowser()
-    @State private var currentBrowserName = DefaultBrowserService.currentHandlerDisplayName()
-    @State private var defaultBrowserError: String?
+    @State private var browserState = DefaultBrowserState.read()
+    @State private var axGranted = AXIsProcessTrusted()
 
     var body: some View {
         Form {
-            launchAtLoginSection
+            generalSection
             profileShortcutsSection
             defaultBrowserSection
             rulesSection
@@ -30,16 +44,32 @@ struct SettingsView: View {
             for: NSApplication.didBecomeActiveNotification
         )) { _ in
             refreshDefaultBrowserState()
+            axGranted = AXIsProcessTrusted()
         }
     }
 
-    private var launchAtLoginSection: some View {
+    private var generalSection: some View {
         Section {
             Toggle("Launch at login", isOn: launchAtLoginBinding)
             if let launchAtLoginError {
                 Text(launchAtLoginError)
                     .font(.caption)
                     .foregroundStyle(.red)
+            }
+
+            HStack {
+                Text("Accessibility permission")
+                Spacer()
+                if axGranted {
+                    Text("Granted")
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Not granted")
+                        .foregroundStyle(.red)
+                    Button("Grant…") {
+                        AccessibilityPermission.openSystemSettings()
+                    }
+                }
             }
         }
     }
@@ -79,13 +109,15 @@ struct SettingsView: View {
             Toggle(isOn: defaultBrowserBinding) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Use Diriger to open web links")
-                    Text("Current default: \(currentBrowserName ?? "Unknown"). Turning this off hands the role back to another installed browser.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    Text(
+                        "Current default: \(browserState.currentName ?? "Unknown"). Turning this off hands the role back to another installed browser."
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
             }
-            if let defaultBrowserError {
-                Text(defaultBrowserError)
+            if let error = browserState.error {
+                Text(error)
                     .font(.caption)
                     .foregroundStyle(.red)
             }
@@ -97,13 +129,15 @@ struct SettingsView: View {
     private var rulesSection: some View {
         Section {
             VStack(alignment: .leading, spacing: 8) {
-                Text("When a URL matches a rule, it opens directly in the selected profile, bypassing the picker. The first match in the list wins.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Text(
+                    "When a URL matches a rule, it opens directly in the selected profile, bypassing the picker. The first match in the list wins."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
                 RulesTableView()
             }
-            .opacity(isDefaultBrowser ? 1.0 : 0.5)
-            .disabled(!isDefaultBrowser)
+            .opacity(browserState.isDefault ? 1.0 : 0.5)
+            .disabled(!browserState.isDefault)
         } header: {
             Text("Routing Rules")
         }
@@ -118,7 +152,7 @@ struct SettingsView: View {
 
     private var defaultBrowserBinding: Binding<Bool> {
         Binding(
-            get: { isDefaultBrowser },
+            get: { browserState.isDefault },
             set: { newValue in applyDefaultBrowser(newValue) }
         )
     }
@@ -139,8 +173,9 @@ struct SettingsView: View {
     }
 
     private func applyDefaultBrowser(_ newValue: Bool) {
-        defaultBrowserError = nil
+        browserState.error = nil
         Task {
+            var capturedError: String?
             do {
                 if newValue {
                     try await DefaultBrowserService.register()
@@ -149,15 +184,15 @@ struct SettingsView: View {
                 }
             } catch {
                 Log.browser.error("Default browser toggle failed: \(error.localizedDescription, privacy: .public)")
-                defaultBrowserError = error.localizedDescription
+                capturedError = error.localizedDescription
             }
-            refreshDefaultBrowserState()
+            browserState = DefaultBrowserState.read()
+            browserState.error = capturedError
         }
     }
 
     private func refreshDefaultBrowserState() {
-        isDefaultBrowser = DefaultBrowserService.isDefaultBrowser()
-        currentBrowserName = DefaultBrowserService.currentHandlerDisplayName()
+        browserState = DefaultBrowserState.read()
     }
 
     private static func readLaunchAtLogin() -> Bool {

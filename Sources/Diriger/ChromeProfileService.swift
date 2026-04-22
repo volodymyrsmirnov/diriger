@@ -12,13 +12,16 @@ enum ChromeProfileService {
         chromeSupportDirectory.appendingPathComponent("Local State", isDirectory: false)
     }
 
-    static func loadProfiles() -> [ChromeProfile] {
+    nonisolated static func loadProfiles() async -> [ChromeProfile] {
         let url = localStateURL
         let data: Data
         do {
             data = try Data(contentsOf: url)
         } catch {
-            Log.chrome.error("Failed to read Chrome Local State at \(url.path, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            Log.chrome
+                .error(
+                    "Failed to read Chrome Local State at \(url.path, privacy: .public): \(error.localizedDescription, privacy: .public)"
+                )
             return []
         }
 
@@ -49,7 +52,7 @@ enum ChromeProfileService {
                 email: email
             )
         }
-        .sorted { $0.directoryName.localizedStandardCompare($1.directoryName) == .orderedAscending }
+        .sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
     }
 
     static func chromeURL() -> URL? {

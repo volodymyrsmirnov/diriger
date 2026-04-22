@@ -2,7 +2,7 @@ import Foundation
 import os
 
 enum Log {
-    private static let subsystem = Bundle.main.bundleIdentifier ?? "tech.inkhorn.diriger"
+    private static let subsystem = AppInfo.bundleID
 
     static let app = Logger(subsystem: subsystem, category: "app")
     static let chrome = Logger(subsystem: subsystem, category: "chrome")

@@ -7,12 +7,21 @@ import KeyboardShortcuts
 final class ProfileManager {
     var profiles: [ChromeProfile] = []
 
+    private let watcher: ChromeLocalStateWatcher
+
     init() {
-        loadProfiles()
+        let watcher = ChromeLocalStateWatcher()
+        self.watcher = watcher
+        // All stored properties are set; safe to capture self.
+        watcher.onChange = { [weak self] in
+            Task { @MainActor in await self?.loadProfiles() }
+        }
+        Task { await loadProfiles() }
+        watcher.start()
     }
 
-    func loadProfiles() {
-        profiles = ChromeProfileService.loadProfiles()
+    func loadProfiles() async {
+        profiles = await ChromeProfileService.loadProfiles()
         registerShortcuts()
     }
 
@@ -104,7 +113,7 @@ struct DirigerApp: App {
 
     var body: some Scene {
         MenuBarExtra("Diriger", systemImage: "wand.and.outline") {
-            MenuBarView(onRefresh: { appDelegate.profileManager.loadProfiles() })
+            MenuBarView()
                 .environment(appDelegate.profileManager)
         }
 

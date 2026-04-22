@@ -1,11 +1,13 @@
 import Foundation
 
-enum RuleKind: String, Codable, CaseIterable, Identifiable, Sendable {
+enum RuleKind: String, Codable, CaseIterable, Identifiable {
     case source
     case domain
     case regex
 
-    var id: String { rawValue }
+    var id: String {
+        rawValue
+    }
 
     var label: String {
         switch self {
@@ -16,7 +18,7 @@ enum RuleKind: String, Codable, CaseIterable, Identifiable, Sendable {
     }
 }
 
-struct RoutingRule: Identifiable, Codable, Hashable, Sendable {
+struct RoutingRule: Identifiable, Codable, Hashable {
     var id: UUID
     var kind: RuleKind
     var pattern: String
