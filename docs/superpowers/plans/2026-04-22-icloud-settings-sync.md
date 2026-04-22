@@ -53,11 +53,13 @@ import XCTest
 @testable import Diriger
 
 final class SmokeTests: XCTestCase {
-    func test_appInfoBundleIDIsKnown() {
-        XCTAssertEqual(AppInfo.bundleID, "tech.inkhorn.diriger")
+    func test_ruleKindHasExpectedCases() {
+        XCTAssertEqual(RuleKind.allCases.count, 3)
     }
 }
 ```
+
+(Original drafted assertion was `XCTAssertEqual(AppInfo.bundleID, "tech.inkhorn.diriger")`, but in the XCTest runner `Bundle.main.bundleIdentifier` returns `"com.apple.dt.xctest.tool"`, so `AppInfo.bundleID`'s `??` fallback never fires. Using `RuleKind.allCases.count == 3` keeps the smoke test host-environment independent while still exercising `@testable import Diriger`.)
 
 - [ ] **Step 2: Run and confirm it fails to build**
 
