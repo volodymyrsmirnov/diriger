@@ -87,12 +87,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSRunningApplication(processIdentifier: pid_t($0))?.bundleIdentifier
         }
 
-        if let profile = RuleEngine.firstMatch(
+        let bypassRules = NSEvent.modifierFlags.contains(.option)
+        let matched = bypassRules ? nil : RuleEngine.firstMatch(
             in: ruleStore.rules,
             url: url,
             sourceBundleID: sourceBundleID,
             availableProfiles: profileManager.profiles
-        ) {
+        )
+
+        if let profile = matched {
             Task {
                 do {
                     try await ChromeLauncher.openURL(url, in: profile)
