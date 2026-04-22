@@ -8,12 +8,8 @@ enum RuleEngine {
         availableProfiles: [ChromeProfile]
     ) -> ChromeProfile? {
         for rule in rules {
-            guard let profile = availableProfiles.first(
-                where: { $0.directoryName == rule.profileDirectory }
-            ) else { continue }
-
+            guard let profile = rule.profileIdentity.profile(in: availableProfiles) else { continue }
             guard matches(rule: rule, url: url, sourceBundleID: sourceBundleID) else { continue }
-
             return profile
         }
         return nil
@@ -46,7 +42,9 @@ enum RuleEngine {
         }
 
         guard !pattern.contains("*") else { return false }
-        return host == pattern
+        if host == pattern { return true }
+        if !pattern.hasPrefix("www."), host == "www." + pattern { return true }
+        return false
     }
 
     private static func regexMatches(pattern: String, url: URL) -> Bool {

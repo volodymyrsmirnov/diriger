@@ -13,7 +13,17 @@ enum ChromeProfileService {
     }
 
     nonisolated static func loadProfiles() async -> [ChromeProfile] {
-        let url = localStateURL
+        await loadProfiles(localStateURL: localStateURL)
+    }
+
+    nonisolated static func loadProfiles(localStateURL url: URL) async -> [ChromeProfile] {
+        loadProfilesSync(localStateURL: url)
+    }
+
+    /// Synchronous variant for startup-critical paths (e.g. `SyncMigration` running
+    /// before `RuleStore` initializes). Reads the same JSON payload from disk;
+    /// the `async` variant exists only so callers can schedule it off the main thread.
+    nonisolated static func loadProfilesSync(localStateURL url: URL = localStateURL) -> [ChromeProfile] {
         let data: Data
         do {
             data = try Data(contentsOf: url)
@@ -24,7 +34,12 @@ enum ChromeProfileService {
                 )
             return []
         }
+        return parseProfiles(from: data)
+    }
 
+    /// Parse a Chrome `Local State` JSON payload into `ChromeProfile` values.
+    /// Returns an empty array on any structural or parse error.
+    nonisolated static func parseProfiles(from data: Data) -> [ChromeProfile] {
         let infoCache: [String: Any]
         do {
             let parsed = try JSONSerialization.jsonObject(with: data)
