@@ -889,8 +889,8 @@ git commit -m "Add pure reconcile decision function for SyncedDefaults"
 
 Turns `SyncedDefaults` into a real class backed by an injected `UserDefaults` and `KVSBackend`. Implements:
 - `register(_ key: SyncedKey)` — adds a key to the tracked set.
-- `reconcile(_ key: SyncedKey)` — uses the pure function + actual storage; writes the winner and updates both mtime maps.
-- `isEnabled` / `setEnabled(_:)` — toggle state stored in UserDefaults under `icloud_sync_enabled`. When disabled, all operations are no-ops.
+- `reconcile(_ key: SyncedKey)` — uses the pure function + actual storage; writes the winner and updates both mtime maps. No-op when `isEnabled == false`.
+- `isEnabled` / `setEnabled(_:)` — toggle state stored in UserDefaults under `icloud_sync_enabled`. When disabled, the KVS-facing operations (`reconcile(_:)`, `reconcileAll()`, `handleExternalChange`, `pushWrite`) are no-ops, but `recordLocalWrite` still stamps local mtimes so that enabling sync later has a meaningful baseline — otherwise two Macs starting from pre-existing data would both see mtime 0 and silently diverge.
 
 **Files:**
 - Modify: `Sources/Diriger/SyncedDefaults.swift`

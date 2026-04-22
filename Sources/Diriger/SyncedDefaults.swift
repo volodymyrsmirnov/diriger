@@ -86,6 +86,10 @@ final class SyncedDefaults {
         }
     }
 
+    /// Stamps the local mtime for `key` regardless of `isEnabled`. Intentional:
+    /// we want a meaningful mtime to exist as soon as the user enables sync,
+    /// otherwise two Macs starting from pre-existing data (both mtime 0) would
+    /// reconcile as `.noAction` and their divergence would persist silently.
     func recordLocalWrite(_ key: SyncedKey) {
         var map = (local.dictionary(forKey: Self.metadataKey) as? [String: Double]) ?? [:]
         map[key.name] = clock()
