@@ -5,5 +5,7 @@
 <dict>
     <key>com.apple.developer.ubiquity-kvstore-identifier</key>
     <string>3YS4G5GH27.tech.inkhorn.diriger</string>
+    <key>com.apple.security.automation.apple-events</key>
+    <true/>
 </dict>
 </plist>
