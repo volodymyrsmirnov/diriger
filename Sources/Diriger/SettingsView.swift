@@ -96,7 +96,7 @@ struct SettingsView: View {
 
                         Spacer()
 
-                        KeyboardShortcuts.Recorder(for: .forProfile(profile.directoryName))
+                        KeyboardShortcuts.Recorder(for: .forProfile(ProfileIdentity.forProfile(profile)))
                     }
                     .padding(.vertical, 2)
                 }

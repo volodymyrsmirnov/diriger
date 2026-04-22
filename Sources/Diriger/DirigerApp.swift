@@ -29,7 +29,8 @@ final class ProfileManager {
         KeyboardShortcuts.removeAllHandlers()
 
         for profile in profiles.prefix(KeyboardShortcuts.Name.maxSlots) {
-            let name = KeyboardShortcuts.Name.forProfile(profile.directoryName)
+            let identity = ProfileIdentity.forProfile(profile)
+            let name = KeyboardShortcuts.Name.forProfile(identity)
             KeyboardShortcuts.onKeyUp(for: name) {
                 Task { @MainActor in
                     do {
