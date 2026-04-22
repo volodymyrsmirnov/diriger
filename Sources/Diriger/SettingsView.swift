@@ -43,6 +43,8 @@ struct SettingsView: View {
             launchAtLogin = SettingsView.readLaunchAtLogin()
             refreshDefaultBrowserState()
             iCloudSignedIn = FileManager.default.ubiquityIdentityToken != nil
+            // Diriger is LSUIElement so `NSApplication.didBecomeActiveNotification`
+            // rarely fires; Settings-open is our deterministic pull-on-foreground trigger.
             if syncEnabled {
                 SyncedDefaults.shared.reconcileAll()
             }
