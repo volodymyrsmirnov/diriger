@@ -32,9 +32,9 @@ final class ChromeLocalStateWatcher {
             return
         }
 
-        // Dispatch events on the main queue so the handler runs on the main actor's
-        // executor. Hopping via `Task { @MainActor }` from .global() crashes under
-        // Swift 6 (dispatch_assert_queue fails during runtime isolation check).
+        // Hop to MainActor explicitly — kevent-backed DispatchSources can invoke
+        // their handler on a worker thread even when `queue:` is `.main`, so
+        // `MainActor.assumeIsolated` here trips the Swift 6 isolation check.
         let newSource = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: newFD,
             eventMask: [.write, .extend, .rename, .delete],
@@ -42,7 +42,7 @@ final class ChromeLocalStateWatcher {
         )
 
         newSource.setEventHandler { [weak self] in
-            MainActor.assumeIsolated {
+            Task { @MainActor in
                 self?.scheduleDebouncedFire()
             }
         }
