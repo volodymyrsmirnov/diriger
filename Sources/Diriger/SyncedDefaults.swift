@@ -29,6 +29,9 @@ protocol KVSBackend: AnyObject {
 extension NSUbiquitousKeyValueStore: KVSBackend {}
 
 enum SyncedDefaults {
+    /// A value-plus-mtime tuple for one side of the reconcile comparison.
+    /// `value` is opaque payload for the caller; only `mtime` (seconds since Unix epoch)
+    /// influences the reconcile decision.
     struct Entry: Equatable {
         let value: Data
         let mtime: Double
