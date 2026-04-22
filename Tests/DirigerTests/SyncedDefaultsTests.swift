@@ -308,6 +308,12 @@ final class SyncedDefaultsDebounceTests: XCTestCase {
         sut.setEnabled(true)
     }
 
+    override func tearDown() async throws {
+        sut?.setEnabled(false)
+        sut = nil
+        try await super.tearDown()
+    }
+
     func test_pushWrite_withZeroDebounceMirrorsImmediately() {
         defaults.set(Data("v".utf8), forKey: "routing_rules")
         clock = 200

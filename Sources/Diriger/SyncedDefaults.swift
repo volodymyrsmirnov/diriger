@@ -67,6 +67,10 @@ final class SyncedDefaults {
         self.debounce = debounce
     }
 
+    // No deinit cleanup: Swift 6 strict concurrency disallows touching @MainActor-isolated
+    // observer tokens from a nonisolated deinit, and this class is app-lifetime. The
+    // notification closures use [weak self] so any post-deallocation firing is a no-op.
+
     var isEnabled: Bool {
         local.bool(forKey: Self.toggleKey)
     }
