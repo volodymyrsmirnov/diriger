@@ -2,6 +2,12 @@ import Foundation
 
 enum AppInfo {
     static let bundleID: String = Bundle.main.bundleIdentifier ?? "tech.inkhorn.diriger"
+
+    static let version: String = {
+        let raw = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        guard let raw, !raw.isEmpty else { return "dev" }
+        return raw
+    }()
 }
 
 extension FileManager {

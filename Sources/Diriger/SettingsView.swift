@@ -30,13 +30,20 @@ struct SettingsView: View {
     @State private var iCloudSignedIn = FileManager.default.ubiquityIdentityToken != nil
 
     var body: some View {
-        Form {
-            generalSection
-            profileShortcutsSection
-            defaultBrowserSection
-            rulesSection
+        VStack(spacing: 0) {
+            Form {
+                generalSection
+                profileShortcutsSection
+                defaultBrowserSection
+                rulesSection
+            }
+            .formStyle(.grouped)
+
+            Text("Version \(AppInfo.version)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.bottom, 12)
         }
-        .formStyle(.grouped)
         .frame(width: 760, height: 720)
         .onAppear {
             launchAtLogin = SettingsView.readLaunchAtLogin()
