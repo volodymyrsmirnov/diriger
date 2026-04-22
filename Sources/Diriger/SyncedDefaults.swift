@@ -238,3 +238,7 @@ final class SyncedDefaults {
         cloud.set(map, forKey: Self.metadataKey)
     }
 }
+
+extension SyncedDefaults {
+    static let shared = SyncedDefaults()
+}
