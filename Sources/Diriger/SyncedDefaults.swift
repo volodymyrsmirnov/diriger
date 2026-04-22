@@ -67,7 +67,26 @@ final class SyncedDefaults {
     }
 
     func setEnabled(_ enabled: Bool) {
+        let wasEnabled = isEnabled
         local.set(enabled, forKey: Self.toggleKey)
+        if enabled, !wasEnabled {
+            _ = cloud.synchronize()
+            reconcileAll()
+        }
+    }
+
+    func reconcileAll() {
+        guard isEnabled else { return }
+        for key in registered {
+            reconcile(key)
+        }
+    }
+
+    func handleExternalChange(changedKeys: [String]) {
+        guard isEnabled else { return }
+        for key in registered where changedKeys.contains(key.name) {
+            reconcile(key)
+        }
     }
 
     func register(_ key: SyncedKey) {
