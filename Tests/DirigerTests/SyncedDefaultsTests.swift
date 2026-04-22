@@ -76,3 +76,104 @@ final class ReconcileTests: XCTestCase {
         )
     }
 }
+
+// FakeKVS — minimal in-memory implementation of KVSBackend.
+@MainActor
+final class FakeKVS: @MainActor KVSBackend {
+    var store: [String: Any] = [:]
+    var syncCallCount = 0
+
+    func object(forKey key: String) -> Any? { store[key] }
+    func set(_ value: Any?, forKey key: String) {
+        if let value { store[key] = value } else { store.removeValue(forKey: key) }
+    }
+    func removeObject(forKey key: String) { store.removeValue(forKey: key) }
+    @discardableResult
+    func synchronize() -> Bool { syncCallCount += 1; return true }
+}
+
+@MainActor
+final class SyncedDefaultsInstanceTests: XCTestCase {
+    private var defaults: UserDefaults!
+    private var kvs: FakeKVS!
+    private var clock: Double = 100
+    private var sut: SyncedDefaults!
+
+    override func setUp() async throws {
+        try await super.setUp()
+        let suite = "tests.\(UUID().uuidString)"
+        defaults = UserDefaults(suiteName: suite)
+        defaults.removePersistentDomain(forName: suite)
+        kvs = FakeKVS()
+        sut = SyncedDefaults(
+            local: defaults,
+            cloud: kvs,
+            clock: { [unowned self] in self.clock }
+        )
+    }
+
+    func test_disabledByDefault() {
+        XCTAssertFalse(sut.isEnabled)
+    }
+
+    func test_toggleIsPersisted() {
+        sut.setEnabled(true)
+        XCTAssertTrue(sut.isEnabled)
+        XCTAssertTrue(defaults.bool(forKey: "icloud_sync_enabled"))
+        sut.setEnabled(false)
+        XCTAssertFalse(sut.isEnabled)
+    }
+
+    func test_reconcile_localOnly_pushesWhenEnabled() {
+        defaults.set(Data("local".utf8), forKey: "routing_rules")
+        clock = 500
+        sut.recordLocalWrite(.routingRules)  // stamps mtime
+        sut.register(.routingRules)
+
+        sut.setEnabled(true)
+        sut.reconcile(.routingRules)
+
+        XCTAssertEqual(kvs.store["routing_rules"] as? Data, Data("local".utf8))
+        let cloudMeta = kvs.store["_diriger_sync_metadata"] as? [String: Double]
+        XCTAssertEqual(cloudMeta?["routing_rules"], 500)
+    }
+
+    func test_reconcile_cloudOnly_pullsWhenEnabled() {
+        kvs.store["routing_rules"] = Data("cloud".utf8)
+        kvs.store["_diriger_sync_metadata"] = ["routing_rules": 800.0]
+        sut.register(.routingRules)
+
+        sut.setEnabled(true)
+        sut.reconcile(.routingRules)
+
+        XCTAssertEqual(defaults.data(forKey: "routing_rules"), Data("cloud".utf8))
+        let localMeta = defaults.dictionary(forKey: "_diriger_sync_metadata") as? [String: Double]
+        XCTAssertEqual(localMeta?["routing_rules"], 800)
+    }
+
+    func test_reconcile_cloudNewer_overwritesLocal() {
+        defaults.set(Data("local".utf8), forKey: "routing_rules")
+        clock = 100
+        sut.recordLocalWrite(.routingRules)
+        sut.register(.routingRules)
+
+        kvs.store["routing_rules"] = Data("cloud".utf8)
+        kvs.store["_diriger_sync_metadata"] = ["routing_rules": 900.0]
+
+        sut.setEnabled(true)
+        sut.reconcile(.routingRules)
+
+        XCTAssertEqual(defaults.data(forKey: "routing_rules"), Data("cloud".utf8))
+    }
+
+    func test_disabled_isInert() {
+        defaults.set(Data("local".utf8), forKey: "routing_rules")
+        clock = 500
+        sut.recordLocalWrite(.routingRules)
+        sut.register(.routingRules)
+
+        sut.reconcile(.routingRules)  // enabled == false
+
+        XCTAssertNil(kvs.store["routing_rules"])
+    }
+}
