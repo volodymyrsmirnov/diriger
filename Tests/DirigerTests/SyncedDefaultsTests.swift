@@ -284,3 +284,63 @@ final class SyncedDefaultsLifecycleTests: XCTestCase {
         XCTAssertNil(defaults.data(forKey: "routing_rules"))
     }
 }
+
+@MainActor
+final class SyncedDefaultsDebounceTests: XCTestCase {
+    private var defaults: UserDefaults!
+    private var kvs: FakeKVS!
+    private var clock: Double = 100
+    private var sut: SyncedDefaults!
+
+    override func setUp() async throws {
+        try await super.setUp()
+        let suite = "tests.\(UUID().uuidString)"
+        defaults = UserDefaults(suiteName: suite)
+        defaults.removePersistentDomain(forName: suite)
+        kvs = FakeKVS()
+        sut = SyncedDefaults(
+            local: defaults,
+            cloud: kvs,
+            clock: { [unowned self] in self.clock },
+            debounce: 0  // synchronous in tests
+        )
+        sut.register(.routingRules)
+        sut.setEnabled(true)
+    }
+
+    func test_pushWrite_withZeroDebounceMirrorsImmediately() {
+        defaults.set(Data("v".utf8), forKey: "routing_rules")
+        clock = 200
+        sut.recordLocalWrite(.routingRules)
+        sut.pushWrite(.routingRules)
+
+        XCTAssertEqual(kvs.store["routing_rules"] as? Data, Data("v".utf8))
+    }
+
+    func test_pushWrite_coalescesBurst() {
+        // Switch to a non-zero debounce to exercise coalescing.
+        sut = SyncedDefaults(
+            local: defaults,
+            cloud: kvs,
+            clock: { [unowned self] in self.clock },
+            debounce: 0.05
+        )
+        sut.register(.routingRules)
+        sut.setEnabled(true)
+
+        defaults.set(Data("a".utf8), forKey: "routing_rules")
+        clock = 201; sut.recordLocalWrite(.routingRules); sut.pushWrite(.routingRules)
+        defaults.set(Data("b".utf8), forKey: "routing_rules")
+        clock = 202; sut.recordLocalWrite(.routingRules); sut.pushWrite(.routingRules)
+        defaults.set(Data("c".utf8), forKey: "routing_rules")
+        clock = 203; sut.recordLocalWrite(.routingRules); sut.pushWrite(.routingRules)
+
+        let exp = expectation(description: "debounce fires")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { exp.fulfill() }
+        wait(for: [exp], timeout: 1.0)
+
+        XCTAssertEqual(kvs.store["routing_rules"] as? Data, Data("c".utf8))
+        let meta = kvs.store["_diriger_sync_metadata"] as? [String: Double]
+        XCTAssertEqual(meta?["routing_rules"], 203)
+    }
+}

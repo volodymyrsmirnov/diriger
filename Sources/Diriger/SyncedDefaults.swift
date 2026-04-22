@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import KeyboardShortcuts
 
 /// Identifies one UserDefaults key that is mirrored to iCloud KVS.
@@ -51,15 +52,19 @@ final class SyncedDefaults {
     private let cloud: KVSBackend
     private let clock: () -> Double
     private var registered: Set<SyncedKey> = []
+    private let debounce: TimeInterval
+    private var pendingWork: [String: DispatchWorkItem] = [:]
 
     init(
         local: UserDefaults = .standard,
         cloud: KVSBackend = NSUbiquitousKeyValueStore.default,
-        clock: @escaping () -> Double = { Date().timeIntervalSince1970 }
+        clock: @escaping () -> Double = { Date().timeIntervalSince1970 },
+        debounce: TimeInterval = 0.5
     ) {
         self.local = local
         self.cloud = cloud
         self.clock = clock
+        self.debounce = debounce
     }
 
     var isEnabled: Bool {
@@ -69,9 +74,15 @@ final class SyncedDefaults {
     func setEnabled(_ enabled: Bool) {
         let wasEnabled = isEnabled
         local.set(enabled, forKey: Self.toggleKey)
-        if enabled, !wasEnabled {
+        switch (wasEnabled, enabled) {
+        case (false, true):
+            attachNotifications()
             _ = cloud.synchronize()
             reconcileAll()
+        case (true, false):
+            detachNotifications()
+        default:
+            break
         }
     }
 
@@ -138,8 +149,60 @@ final class SyncedDefaults {
         }
     }
 
+    func pushWrite(_ key: SyncedKey) {
+        guard isEnabled else { return }
+
+        if debounce <= 0 {
+            reconcile(key)
+            return
+        }
+
+        pendingWork[key.name]?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            MainActor.assumeIsolated {
+                self.pendingWork[key.name] = nil
+                self.reconcile(key)
+            }
+        }
+        pendingWork[key.name] = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + debounce, execute: work)
+    }
+
     static let keyDidChangeRemotelyNotification =
         Notification.Name("tech.inkhorn.diriger.SyncedDefaults.keyDidChangeRemotely")
+
+    // MARK: - notification observers
+
+    private var kvsObserver: NSObjectProtocol?
+    private var appActiveObserver: NSObjectProtocol?
+
+    private func attachNotifications() {
+        kvsObserver = NotificationCenter.default.addObserver(
+            forName: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
+            object: cloud as? NSUbiquitousKeyValueStore,
+            queue: .main
+        ) { [weak self] note in
+            let changed = (note.userInfo?[NSUbiquitousKeyValueStoreChangedKeysKey] as? [String]) ?? []
+            MainActor.assumeIsolated {
+                self?.handleExternalChange(changedKeys: changed)
+            }
+        }
+        appActiveObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.reconcileAll() }
+        }
+    }
+
+    private func detachNotifications() {
+        if let kvsObserver { NotificationCenter.default.removeObserver(kvsObserver) }
+        if let appActiveObserver { NotificationCenter.default.removeObserver(appActiveObserver) }
+        kvsObserver = nil
+        appActiveObserver = nil
+    }
 
     // MARK: - storage helpers
 
