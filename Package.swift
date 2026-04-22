@@ -18,6 +18,11 @@ let package = Package(
             name: "Diriger",
             dependencies: ["KeyboardShortcuts"],
             path: "Sources/Diriger"
+        ),
+        .testTarget(
+            name: "DirigerTests",
+            dependencies: ["Diriger"],
+            path: "Tests/DirigerTests"
         )
     ],
     swiftLanguageModes: [.v6]
