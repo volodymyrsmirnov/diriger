@@ -2167,7 +2167,7 @@ Replace `Resources/Diriger.entitlements` with:
 <plist version="1.0">
 <dict>
     <key>com.apple.developer.ubiquity-kvstore-identifier</key>
-    <string>$(TeamIdentifierPrefix)tech.inkhorn.diriger</string>
+    <string>3YS4G5GH27.tech.inkhorn.diriger</string>
 </dict>
 </plist>
 ```

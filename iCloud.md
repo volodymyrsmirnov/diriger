@@ -63,12 +63,12 @@ Edit `Resources/Diriger.entitlements` so that it contains:
 <plist version="1.0">
 <dict>
     <key>com.apple.developer.ubiquity-kvstore-identifier</key>
-    <string>$(TeamIdentifierPrefix)tech.inkhorn.diriger</string>
+    <string>3YS4G5GH27.tech.inkhorn.diriger</string>
 </dict>
 </plist>
 ```
 
-`$(TeamIdentifierPrefix)` is expanded by the code-signing tooling to `3YS4G5GH27.` (note the trailing period). The resulting identifier stored in the signed binary is `3YS4G5GH27.tech.inkhorn.diriger`. **Do not hand-expand this string** — keep the `$(TeamIdentifierPrefix)` macro so that a future Team ID change (e.g., switching to a business account) does not silently break signing.
+The value is `<Team ID>.<Bundle ID>` — hardcoded. The `$(TeamIdentifierPrefix)` macro you may see elsewhere is expanded only by Xcode's build system when `xcodebuild` processes an Xcode-project entitlements setting. Our `scripts/build-app.sh` calls `codesign --entitlements <plist>` directly, with no variable substitution, so the Team ID must be written literally. If you ever migrate the build to a workflow that uses `xcodebuild` for code signing, you can reintroduce `$(TeamIdentifierPrefix)` — but keep it hardcoded for the current script-based pipeline.
 
 ## 4. Build and sign
 
