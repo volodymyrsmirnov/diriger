@@ -252,4 +252,35 @@ final class SyncedDefaultsLifecycleTests: XCTestCase {
         sut.handleExternalChange(changedKeys: ["unrelated"])
         XCTAssertNil(defaults.data(forKey: "unrelated"))
     }
+
+    func test_setEnabled_doesNotReFireWhenAlreadyEnabled() {
+        sut.register(.routingRules)
+        sut.setEnabled(true)
+        let countAfterFirst = kvs.syncCallCount
+
+        sut.setEnabled(true)
+
+        XCTAssertEqual(kvs.syncCallCount, countAfterFirst)
+    }
+
+    func test_reconcileAll_isInertWhenDisabled() {
+        defaults.set(Data("r".utf8), forKey: "routing_rules")
+        clock = 500
+        sut.recordLocalWrite(.routingRules)
+        sut.register(.routingRules)
+
+        sut.reconcileAll()  // isEnabled == false
+
+        XCTAssertNil(kvs.store["routing_rules"])
+    }
+
+    func test_handleExternalChange_isInertWhenDisabled() {
+        kvs.store["routing_rules"] = Data("new".utf8)
+        kvs.store["_diriger_sync_metadata"] = ["routing_rules": 900.0]
+        sut.register(.routingRules)
+
+        sut.handleExternalChange(changedKeys: ["routing_rules"])  // isEnabled == false
+
+        XCTAssertNil(defaults.data(forKey: "routing_rules"))
+    }
 }
