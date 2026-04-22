@@ -1549,9 +1549,9 @@ final class RuleStore {
         }
     }
 
-    deinit {
-        if let remoteObserver { NotificationCenter.default.removeObserver(remoteObserver) }
-    }
+    // No deinit cleanup: Swift 6 strict concurrency disallows touching @MainActor-isolated
+    // stored properties from a nonisolated deinit, and RuleStore is app-lifetime. The
+    // observer closure uses [weak self] so post-deallocation firings are no-ops.
 
     func add(_ rule: RoutingRule) {
         rules.append(rule)
