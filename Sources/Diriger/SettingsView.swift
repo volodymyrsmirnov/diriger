@@ -26,9 +26,12 @@ struct SettingsView: View {
     @State private var launchAtLoginError: String?
     @State private var browserState = DefaultBrowserState.read()
     @State private var axGranted = AXIsProcessTrusted()
+    @State private var syncEnabled = SyncedDefaults.shared.isEnabled
+    @State private var iCloudSignedIn = FileManager.default.ubiquityIdentityToken != nil
 
     var body: some View {
         Form {
+            iCloudSection
             generalSection
             profileShortcutsSection
             defaultBrowserSection
@@ -39,13 +42,48 @@ struct SettingsView: View {
         .onAppear {
             launchAtLogin = SettingsView.readLaunchAtLogin()
             refreshDefaultBrowserState()
+            iCloudSignedIn = FileManager.default.ubiquityIdentityToken != nil
+            if syncEnabled {
+                SyncedDefaults.shared.reconcileAll()
+            }
         }
         .onReceive(NotificationCenter.default.publisher(
             for: NSApplication.didBecomeActiveNotification
         )) { _ in
             refreshDefaultBrowserState()
             axGranted = AXIsProcessTrusted()
+            iCloudSignedIn = FileManager.default.ubiquityIdentityToken != nil
         }
+    }
+
+    private var iCloudSection: some View {
+        Section {
+            Toggle(isOn: iCloudToggleBinding) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Sync settings via iCloud")
+                    Text("Syncs routing rules and profile shortcuts across your Macs. Profiles are identified by Chrome account email.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if syncEnabled, !iCloudSignedIn {
+                Text("Not signed into iCloud on this Mac. Sign in via System Settings to start syncing.")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+        } header: {
+            Text("iCloud")
+        }
+    }
+
+    private var iCloudToggleBinding: Binding<Bool> {
+        Binding(
+            get: { syncEnabled },
+            set: { newValue in
+                SyncedDefaults.shared.setEnabled(newValue)
+                syncEnabled = SyncedDefaults.shared.isEnabled
+            }
+        )
     }
 
     private var generalSection: some View {
