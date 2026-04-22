@@ -52,6 +52,10 @@ extension ProfileIdentity {
         return .directory(profile.directoryName)
     }
 
+    /// Returns the matching profile's current `directoryName`, or `nil` if the
+    /// profile isn't present on this Mac. For `.directory`, this is a liveness
+    /// check — it returns the same string searched for when the profile exists,
+    /// or `nil` when it doesn't.
     func directoryName(in profiles: [ChromeProfile]) -> String? {
         switch self {
         case .email(let value):
