@@ -31,7 +31,6 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            iCloudSection
             generalSection
             profileShortcutsSection
             defaultBrowserSection
@@ -55,26 +54,6 @@ struct SettingsView: View {
             refreshDefaultBrowserState()
             axGranted = AXIsProcessTrusted()
             iCloudSignedIn = FileManager.default.ubiquityIdentityToken != nil
-        }
-    }
-
-    private var iCloudSection: some View {
-        Section {
-            Toggle(isOn: iCloudToggleBinding) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Sync settings via iCloud")
-                    Text("Syncs routing rules and profile shortcuts across your Macs. Profiles are identified by Chrome account email.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            if syncEnabled, !iCloudSignedIn {
-                Text("Not signed into iCloud on this Mac. Sign in via System Settings to start syncing.")
-                    .font(.caption)
-                    .foregroundStyle(.red)
-            }
-        } header: {
-            Text("iCloud")
         }
     }
 
@@ -111,6 +90,15 @@ struct SettingsView: View {
                     }
                 }
             }
+
+            Toggle("Sync settings via iCloud", isOn: iCloudToggleBinding)
+            if syncEnabled, !iCloudSignedIn {
+                Text("Not signed into iCloud on this Mac. Sign in via System Settings to start syncing.")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+        } header: {
+            Text("General")
         }
     }
 
