@@ -107,6 +107,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
             Task { @MainActor in
                 await SyncMigration.runIfNeeded()
+                SyncedDefaults.shared.start()
             }
         }
     }

@@ -58,6 +58,7 @@ final class SyncedDefaults {
     private let cloud: KVSBackend
     private let clock: () -> Double
     private var registered: Set<SyncedKey> = []
+    private var suppressKVOFor: Set<String> = []
     private let debounce: TimeInterval
     private var pendingWork: [String: DispatchWorkItem] = [:]
 
@@ -79,6 +80,16 @@ final class SyncedDefaults {
 
     var isEnabled: Bool {
         local.bool(forKey: Self.toggleKey)
+    }
+
+    /// Call once at app startup after migration. No-op if sync is disabled.
+    /// Attaches notification observers and runs an initial reconcile pass against
+    /// whatever's currently in KVS.
+    func start() {
+        guard isEnabled else { return }
+        attachNotifications()
+        _ = cloud.synchronize()
+        reconcileAll()
     }
 
     func setEnabled(_ enabled: Bool) {
@@ -225,13 +236,17 @@ final class SyncedDefaults {
     }
 
     private func readEntry(from cloud: KVSBackend, key: SyncedKey) -> Entry? {
-        guard let value = cloud.object(forKey: key.name) as? Data else { return nil }
-        let map = (cloud.object(forKey: Self.metadataKey) as? [String: Double]) ?? [:]
-        let mtime = map[key.name] ?? 0
+        guard let packed = cloud.object(forKey: key.name) as? [String: Any],
+              let value = packed["v"] as? Data,
+              let mtime = packed["m"] as? Double
+        else { return nil }
         return Entry(value: value, mtime: mtime)
     }
 
     private func write(entry: Entry, to defaults: UserDefaults, key: SyncedKey) {
+        if !key.ownedByApp {
+            suppressKVOFor.insert(key.name)
+        }
         defaults.set(entry.value, forKey: key.name)
         var map = (defaults.dictionary(forKey: Self.metadataKey) as? [String: Double]) ?? [:]
         map[key.name] = entry.mtime
@@ -239,10 +254,7 @@ final class SyncedDefaults {
     }
 
     private func write(entry: Entry, to cloud: KVSBackend, key: SyncedKey) {
-        cloud.set(entry.value, forKey: key.name)
-        var map = (cloud.object(forKey: Self.metadataKey) as? [String: Double]) ?? [:]
-        map[key.name] = entry.mtime
-        cloud.set(map, forKey: Self.metadataKey)
+        cloud.set(["v": entry.value, "m": entry.mtime] as [String: Any], forKey: key.name)
     }
 }
 
@@ -258,6 +270,9 @@ extension SyncedDefaults {
         let obs = DefaultsKVO(key: key.name) { [weak self] in
             MainActor.assumeIsolated {
                 guard let self else { return }
+                // Consume a pending cloud-origin suppression flag if present — this KVO
+                // fire is the echo of our own cloud→local write, not a user edit.
+                if self.suppressKVOFor.remove(key.name) != nil { return }
                 self.recordLocalWrite(key)
                 self.pushWrite(key)
             }

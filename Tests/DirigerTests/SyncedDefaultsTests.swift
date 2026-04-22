@@ -133,14 +133,13 @@ final class SyncedDefaultsInstanceTests: XCTestCase {
         sut.setEnabled(true)
         sut.reconcile(.routingRules)
 
-        XCTAssertEqual(kvs.store["routing_rules"] as? Data, Data("local".utf8))
-        let cloudMeta = kvs.store["_diriger_sync_metadata"] as? [String: Double]
-        XCTAssertEqual(cloudMeta?["routing_rules"], 500)
+        let packed = kvs.store["routing_rules"] as? [String: Any]
+        XCTAssertEqual(packed?["v"] as? Data, Data("local".utf8))
+        XCTAssertEqual(packed?["m"] as? Double, 500)
     }
 
     func test_reconcile_cloudOnly_pullsWhenEnabled() {
-        kvs.store["routing_rules"] = Data("cloud".utf8)
-        kvs.store["_diriger_sync_metadata"] = ["routing_rules": 800.0]
+        kvs.store["routing_rules"] = ["v": Data("cloud".utf8), "m": 800.0] as [String: Any]
         sut.register(.routingRules)
 
         sut.setEnabled(true)
@@ -157,8 +156,7 @@ final class SyncedDefaultsInstanceTests: XCTestCase {
         sut.recordLocalWrite(.routingRules)
         sut.register(.routingRules)
 
-        kvs.store["routing_rules"] = Data("cloud".utf8)
-        kvs.store["_diriger_sync_metadata"] = ["routing_rules": 900.0]
+        kvs.store["routing_rules"] = ["v": Data("cloud".utf8), "m": 900.0] as [String: Any]
 
         sut.setEnabled(true)
         sut.reconcile(.routingRules)
@@ -211,11 +209,10 @@ final class SyncedDefaultsLifecycleTests: XCTestCase {
 
         sut.reconcileAll()
 
-        XCTAssertEqual(kvs.store["routing_rules"] as? Data, Data("r".utf8))
-        XCTAssertEqual(
-            kvs.store["KeyboardShortcuts_profile_shortcut_email:a@b.com"] as? Data,
-            Data("s".utf8)
-        )
+        let packedRules = kvs.store["routing_rules"] as? [String: Any]
+        XCTAssertEqual(packedRules?["v"] as? Data, Data("r".utf8))
+        let packedShortcut = kvs.store["KeyboardShortcuts_profile_shortcut_email:a@b.com"] as? [String: Any]
+        XCTAssertEqual(packedShortcut?["v"] as? Data, Data("s".utf8))
     }
 
     func test_enable_triggersReconcileAll() {
@@ -226,7 +223,8 @@ final class SyncedDefaultsLifecycleTests: XCTestCase {
 
         sut.setEnabled(true)  // should reconcile
 
-        XCTAssertEqual(kvs.store["routing_rules"] as? Data, Data("r".utf8))
+        let packed = kvs.store["routing_rules"] as? [String: Any]
+        XCTAssertEqual(packed?["v"] as? Data, Data("r".utf8))
     }
 
     func test_handleExternalChange_reconcilesOnlyChangedKeys() {
@@ -236,8 +234,7 @@ final class SyncedDefaultsLifecycleTests: XCTestCase {
         sut.register(.routingRules)
         sut.setEnabled(true)
 
-        kvs.store["routing_rules"] = Data("new".utf8)
-        kvs.store["_diriger_sync_metadata"] = ["routing_rules": 900.0]
+        kvs.store["routing_rules"] = ["v": Data("new".utf8), "m": 900.0] as [String: Any]
 
         sut.handleExternalChange(changedKeys: ["routing_rules"])
 
@@ -275,13 +272,39 @@ final class SyncedDefaultsLifecycleTests: XCTestCase {
     }
 
     func test_handleExternalChange_isInertWhenDisabled() {
-        kvs.store["routing_rules"] = Data("new".utf8)
-        kvs.store["_diriger_sync_metadata"] = ["routing_rules": 900.0]
+        kvs.store["routing_rules"] = ["v": Data("new".utf8), "m": 900.0] as [String: Any]
         sut.register(.routingRules)
 
         sut.handleExternalChange(changedKeys: ["routing_rules"])  // isEnabled == false
 
         XCTAssertNil(defaults.data(forKey: "routing_rules"))
+    }
+
+    func test_start_reconcilesWhenEnabledAtLaunch() {
+        // Simulate a relaunch: isEnabled is already true in UserDefaults, and there's
+        // existing local data plus an existing cloud snapshot.
+        defaults.set(Data("r".utf8), forKey: "routing_rules")
+        clock = 500
+        sut.recordLocalWrite(.routingRules)
+        defaults.set(true, forKey: "icloud_sync_enabled")  // enabled from prior session
+        sut.register(.routingRules)
+
+        kvs.store["routing_rules"] = ["v": Data("cloudy".utf8), "m": 900.0] as [String: Any]
+
+        sut.start()
+
+        XCTAssertEqual(defaults.data(forKey: "routing_rules"), Data("cloudy".utf8))
+    }
+
+    func test_start_isNoOpWhenDisabled() {
+        defaults.set(Data("r".utf8), forKey: "routing_rules")
+        clock = 500
+        sut.recordLocalWrite(.routingRules)
+        sut.register(.routingRules)
+
+        sut.start()  // isEnabled == false
+
+        XCTAssertNil(kvs.store["routing_rules"])
     }
 }
 
@@ -320,7 +343,8 @@ final class SyncedDefaultsDebounceTests: XCTestCase {
         sut.recordLocalWrite(.routingRules)
         sut.pushWrite(.routingRules)
 
-        XCTAssertEqual(kvs.store["routing_rules"] as? Data, Data("v".utf8))
+        let packed = kvs.store["routing_rules"] as? [String: Any]
+        XCTAssertEqual(packed?["v"] as? Data, Data("v".utf8))
     }
 
     func test_pushWrite_coalescesBurst() {
@@ -345,8 +369,27 @@ final class SyncedDefaultsDebounceTests: XCTestCase {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { exp.fulfill() }
         wait(for: [exp], timeout: 1.0)
 
-        XCTAssertEqual(kvs.store["routing_rules"] as? Data, Data("c".utf8))
-        let meta = kvs.store["_diriger_sync_metadata"] as? [String: Double]
-        XCTAssertEqual(meta?["routing_rules"], 203)
+        let packed = kvs.store["routing_rules"] as? [String: Any]
+        XCTAssertEqual(packed?["v"] as? Data, Data("c".utf8))
+        XCTAssertEqual(packed?["m"] as? Double, 203)
+    }
+
+    func test_cloudPullForLibraryOwnedKey_doesNotEchoBackToCloud() {
+        let shortcutKey = SyncedKey.profileShortcut(for: .email("a@b.com"))
+        sut.register(shortcutKey)
+
+        // Simulate a cloud write of a shortcut landing on this Mac.
+        kvs.store[shortcutKey.name] = ["v": Data("cloud".utf8), "m": 900.0] as [String: Any]
+        sut.observeLibraryOwnedKey(shortcutKey)
+
+        // Receive the change notification and wait for the debounce window to clear.
+        sut.handleExternalChange(changedKeys: [shortcutKey.name])
+        let exp = expectation(description: "debounce window")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { exp.fulfill() }
+        wait(for: [exp], timeout: 1.0)
+
+        // Cloud mtime must still be 900 (no echo push has overwritten it).
+        let packed = kvs.store[shortcutKey.name] as? [String: Any]
+        XCTAssertEqual(packed?["m"] as? Double, 900.0)
     }
 }
