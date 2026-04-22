@@ -2,5 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
     "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
-<dict/>
+<dict>
+    <key>com.apple.developer.ubiquity-kvstore-identifier</key>
+    <string>3YS4G5GH27.tech.inkhorn.diriger</string>
+</dict>
 </plist>
