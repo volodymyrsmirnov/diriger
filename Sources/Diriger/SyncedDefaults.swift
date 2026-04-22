@@ -38,10 +38,11 @@ extension NSUbiquitousKeyValueStore: KVSBackend {}
 @MainActor
 final class SyncedDefaults {
     /// A value-plus-mtime tuple for one side of the reconcile comparison.
-    /// `value` is opaque payload for the caller; only `mtime` (seconds since Unix epoch)
-    /// influences the reconcile decision.
-    struct Entry: Equatable {
-        let value: Data
+    /// `value` is an opaque property-list-compatible payload for the caller
+    /// (e.g. `Data` for routing rules, `String`/`Bool` for KeyboardShortcuts-owned keys);
+    /// only `mtime` (seconds since Unix epoch) influences the reconcile decision.
+    struct Entry {
+        let value: Any
         let mtime: Double
     }
 
@@ -58,7 +59,10 @@ final class SyncedDefaults {
     private let cloud: KVSBackend
     private let clock: () -> Double
     private var registered: Set<SyncedKey> = []
-    private var suppressKVOFor: Set<String> = []
+    /// Counts pending cloud→local KVO echoes we should swallow, per key. A counter
+    /// (not a Set) is required because two cloud pulls can land before the first
+    /// KVO fires — a set would coalesce them and leak the second echo as a spurious push.
+    private var suppressKVOFor: [String: Int] = [:]
     private let debounce: TimeInterval
     private var pendingWork: [String: DispatchWorkItem] = [:]
 
@@ -200,6 +204,9 @@ final class SyncedDefaults {
     private var libraryObservers: [SyncedKey: DefaultsKVO] = [:]
 
     private func attachNotifications() {
+        // Idempotent: if either observer is already installed, leave both in place.
+        // Prevents observer leaks if `start()` and `setEnabled(true)` ever race.
+        guard kvsObserver == nil, appActiveObserver == nil else { return }
         kvsObserver = NotificationCenter.default.addObserver(
             forName: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
             object: cloud as? NSUbiquitousKeyValueStore,
@@ -229,7 +236,10 @@ final class SyncedDefaults {
     // MARK: - storage helpers
 
     private func readEntry(from defaults: UserDefaults, key: SyncedKey) -> Entry? {
-        guard let value = defaults.data(forKey: key.name) else { return nil }
+        // Use object(forKey:) rather than data(forKey:): KeyboardShortcuts stores
+        // shortcuts as String (JSON-encoded) and Bool false for disabled slots,
+        // so data(forKey:) would return nil for library-owned keys.
+        guard let value = defaults.object(forKey: key.name) else { return nil }
         let map = (defaults.dictionary(forKey: Self.metadataKey) as? [String: Double]) ?? [:]
         let mtime = map[key.name] ?? 0
         return Entry(value: value, mtime: mtime)
@@ -237,7 +247,7 @@ final class SyncedDefaults {
 
     private func readEntry(from cloud: KVSBackend, key: SyncedKey) -> Entry? {
         guard let packed = cloud.object(forKey: key.name) as? [String: Any],
-              let value = packed["v"] as? Data,
+              let value = packed["v"],
               let mtime = packed["m"] as? Double
         else { return nil }
         return Entry(value: value, mtime: mtime)
@@ -248,8 +258,8 @@ final class SyncedDefaults {
         // to change the stored value — otherwise UserDefaults may not fire KVO at
         // all (equal-value writes are commonly filtered), leaving the flag stale
         // and silently swallowing the user's next genuine edit.
-        if !key.ownedByApp, defaults.data(forKey: key.name) != entry.value {
-            suppressKVOFor.insert(key.name)
+        if !key.ownedByApp, !plistValue(defaults.object(forKey: key.name), equals: entry.value) {
+            suppressKVOFor[key.name, default: 0] += 1
         }
         defaults.set(entry.value, forKey: key.name)
         var map = (defaults.dictionary(forKey: Self.metadataKey) as? [String: Double]) ?? [:]
@@ -259,6 +269,16 @@ final class SyncedDefaults {
 
     private func write(entry: Entry, to cloud: KVSBackend, key: SyncedKey) {
         cloud.set(["v": entry.value, "m": entry.mtime] as [String: Any], forKey: key.name)
+    }
+
+    /// Property-list value equality via NSObject bridging. `Data`, `String`, `Bool`,
+    /// `NSNumber`, arrays, and dictionaries all compare correctly via `isEqual(_:)`.
+    private func plistValue(_ lhs: Any?, equals rhs: Any?) -> Bool {
+        switch (lhs, rhs) {
+        case (nil, nil): return true
+        case (nil, _?), (_?, nil): return false
+        case let (l?, r?): return (l as AnyObject).isEqual(r as AnyObject)
+        }
     }
 }
 
@@ -271,12 +291,16 @@ extension SyncedDefaults {
     /// install a KVO observer on the local UserDefaults so we can stamp mtime and push.
     func observeLibraryOwnedKey(_ key: SyncedKey) {
         precondition(!key.ownedByApp)
-        let obs = DefaultsKVO(key: key.name) { [weak self] in
+        let obs = DefaultsKVO(defaults: local, key: key.name) { [weak self] in
             MainActor.assumeIsolated {
                 guard let self else { return }
-                // Consume a pending cloud-origin suppression flag if present — this KVO
-                // fire is the echo of our own cloud→local write, not a user edit.
-                if self.suppressKVOFor.remove(key.name) != nil { return }
+                // Consume one pending cloud-origin suppression — this KVO fire is the
+                // echo of our own cloud→local write, not a user edit.
+                if let count = self.suppressKVOFor[key.name], count > 0 {
+                    if count == 1 { self.suppressKVOFor.removeValue(forKey: key.name) }
+                    else { self.suppressKVOFor[key.name] = count - 1 }
+                    return
+                }
                 self.recordLocalWrite(key)
                 self.pushWrite(key)
             }
@@ -293,17 +317,22 @@ extension SyncedDefaults {
 @MainActor
 private final class DefaultsKVO: NSObject {
     nonisolated let key: String
+    // `nonisolated(unsafe)` so `deinit` (which Swift 6 runs outside the main actor) can
+    // remove the observer. Access is in practice confined to the main actor via
+    // `SyncedDefaults`, and `deinit` runs exactly once after the last release.
+    private nonisolated(unsafe) let defaults: UserDefaults
     private let onChange: @MainActor () -> Void
 
-    init(key: String, onChange: @escaping @MainActor () -> Void) {
+    init(defaults: UserDefaults, key: String, onChange: @escaping @MainActor () -> Void) {
+        self.defaults = defaults
         self.key = key
         self.onChange = onChange
         super.init()
-        UserDefaults.standard.addObserver(self, forKeyPath: key, options: [.new], context: nil)
+        defaults.addObserver(self, forKeyPath: key, options: [.new], context: nil)
     }
 
     deinit {
-        UserDefaults.standard.removeObserver(self, forKeyPath: key)
+        defaults.removeObserver(self, forKeyPath: key)
     }
 
     override func observeValue(

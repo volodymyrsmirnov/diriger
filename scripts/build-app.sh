@@ -57,7 +57,11 @@ if [ -f "$PROVISION_PROFILE" ]; then
     echo "Embedding provisioning profile..."
     cp "$PROVISION_PROFILE" "$APP_BUNDLE/Contents/embedded.provisionprofile"
 else
-    echo "  Warning: No provisioning profile at $PROVISION_PROFILE — iCloud-entitled builds will fail to launch."
+    echo "  Error: No provisioning profile at $PROVISION_PROFILE." >&2
+    echo "  The iCloud KVS entitlement in Resources/Diriger.entitlements requires an" >&2
+    echo "  embedded profile; a build without it fails to launch (launchd error 163)." >&2
+    echo "  Set PROVISION_PROFILE_PATH or place a .provisionprofile at the expected path." >&2
+    exit 1
 fi
 
 echo "Signing app bundle..."

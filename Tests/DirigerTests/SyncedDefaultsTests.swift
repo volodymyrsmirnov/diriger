@@ -374,6 +374,54 @@ final class SyncedDefaultsDebounceTests: XCTestCase {
         XCTAssertEqual(packed?["m"] as? Double, 203)
     }
 
+    func test_libraryOwnedStringValue_pushesToCloudAsString() {
+        // KeyboardShortcuts persists shortcuts to UserDefaults as a JSON-encoded String
+        // (not Data). Regression guard: readEntry must observe the String via
+        // object(forKey:), not data(forKey:), so the push reaches the cloud.
+        let shortcutKey = SyncedKey.profileShortcut(for: .email("a@b.com"))
+        defaults.set("{\"carbonKeyCode\":1,\"carbonModifiers\":0}", forKey: shortcutKey.name)
+        clock = 400
+        sut.recordLocalWrite(shortcutKey)
+        sut.register(shortcutKey)
+
+        sut.reconcile(shortcutKey)
+
+        let packed = kvs.store[shortcutKey.name] as? [String: Any]
+        XCTAssertEqual(packed?["v"] as? String, "{\"carbonKeyCode\":1,\"carbonModifiers\":0}")
+        XCTAssertEqual(packed?["m"] as? Double, 400)
+    }
+
+    func test_libraryOwnedBoolValue_pushesToCloudAsBool() {
+        // KeyboardShortcuts persists a disabled shortcut as Bool false.
+        let shortcutKey = SyncedKey.profileShortcut(for: .email("a@b.com"))
+        defaults.set(false, forKey: shortcutKey.name)
+        clock = 500
+        sut.recordLocalWrite(shortcutKey)
+        sut.register(shortcutKey)
+
+        sut.reconcile(shortcutKey)
+
+        let packed = kvs.store[shortcutKey.name] as? [String: Any]
+        XCTAssertEqual(packed?["v"] as? Bool, false)
+    }
+
+    func test_libraryOwnedStringValue_pullsFromCloudIntoDefaults() {
+        // Inverse of the push test: cloud carries a String shortcut; local must receive it.
+        let shortcutKey = SyncedKey.profileShortcut(for: .email("a@b.com"))
+        kvs.store[shortcutKey.name] = [
+            "v": "{\"carbonKeyCode\":2,\"carbonModifiers\":512}",
+            "m": 900.0,
+        ] as [String: Any]
+        sut.register(shortcutKey)
+
+        sut.reconcile(shortcutKey)
+
+        XCTAssertEqual(
+            defaults.string(forKey: shortcutKey.name),
+            "{\"carbonKeyCode\":2,\"carbonModifiers\":512}"
+        )
+    }
+
     func test_cloudPullForLibraryOwnedKey_doesNotEchoBackToCloud() {
         let shortcutKey = SyncedKey.profileShortcut(for: .email("a@b.com"))
         sut.register(shortcutKey)

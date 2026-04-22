@@ -59,9 +59,12 @@ struct SettingsView: View {
 
     private var iCloudToggleBinding: Binding<Bool> {
         Binding(
-            get: { syncEnabled },
+            get: { syncEnabled && iCloudSignedIn },
             set: { newValue in
-                SyncedDefaults.shared.setEnabled(newValue)
+                // Never turn sync ON while iCloud is signed out — the write would
+                // silently no-op, and the UI would lie. We still honor OFF from any state.
+                let target = newValue && iCloudSignedIn
+                SyncedDefaults.shared.setEnabled(target)
                 syncEnabled = SyncedDefaults.shared.isEnabled
             }
         )
@@ -77,10 +80,11 @@ struct SettingsView: View {
             }
 
             Toggle("Sync settings via iCloud", isOn: iCloudToggleBinding)
-            if syncEnabled, !iCloudSignedIn {
-                Text("Not signed into iCloud on this Mac. Sign in via System Settings to start syncing.")
+                .disabled(!iCloudSignedIn)
+            if !iCloudSignedIn {
+                Text("Not signed into iCloud on this Mac. Sign in via System Settings to enable syncing.")
                     .font(.caption)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(.secondary)
             }
 
             HStack {

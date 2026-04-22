@@ -28,6 +28,10 @@ final class RuleStore {
         }
     }
 
+    // No deinit cleanup: Swift 6 strict concurrency disallows touching @MainActor-isolated
+    // observer tokens from a nonisolated deinit, and this class is app-lifetime. The
+    // notification closure uses [weak self] so post-deallocation firings are no-ops.
+
     func add(_ rule: RoutingRule) {
         rules.append(rule)
         persist()

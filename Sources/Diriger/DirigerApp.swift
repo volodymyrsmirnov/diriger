@@ -98,6 +98,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let linkPicker: LinkPickerController
 
     override init() {
+        // Migration MUST run before RuleStore initializes — RuleStore caches rules
+        // from UserDefaults in memory at init, so any post-init migration would be
+        // overwritten by the first user edit.
+        SyncMigration.runIfNeeded()
         let pm = ProfileManager()
         self.profileManager = pm
         self.ruleStore = RuleStore()
@@ -113,10 +117,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 forEventClass: AEEventClass(kInternetEventClass),
                 andEventID: AEEventID(kAEGetURL)
             )
-            Task { @MainActor in
-                await SyncMigration.runIfNeeded()
-                SyncedDefaults.shared.start()
-            }
+            SyncedDefaults.shared.start()
         }
     }
 

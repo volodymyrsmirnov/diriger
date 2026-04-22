@@ -5,13 +5,16 @@ enum SyncMigration {
     static let schemaVersionKey = "sync_schema_version"
     static let currentSchemaVersion = 1
 
+    /// Synchronous on purpose: must complete before `RuleStore` initializes and reads
+    /// `UserDefaults`, otherwise a user edit against stale in-memory rules would
+    /// overwrite the migrated-on-disk rules.
     @MainActor
     static func runIfNeeded(
         defaults: UserDefaults = .standard,
-        loadProfiles: @Sendable () async -> [ChromeProfile] = { await ChromeProfileService.loadProfiles() }
-    ) async {
+        loadProfiles: () -> [ChromeProfile] = { ChromeProfileService.loadProfilesSync() }
+    ) {
         guard defaults.integer(forKey: schemaVersionKey) < currentSchemaVersion else { return }
-        let profiles = await loadProfiles()
+        let profiles = loadProfiles()
         performMigration(defaults: defaults, profiles: profiles)
         markSchemaApplied(defaults: defaults)
     }
