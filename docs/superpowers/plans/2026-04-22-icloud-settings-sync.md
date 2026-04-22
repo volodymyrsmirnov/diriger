@@ -664,7 +664,8 @@ Expected: all prior tests still green.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add Sources/Diriger/ShortcutNames.swift Sources/Diriger/DirigerApp.swift Sources/Diriger/SettingsView.swift
+git add Sources/Diriger/ShortcutNames.swift Sources/Diriger/DirigerApp.swift \
+        Sources/Diriger/SettingsView.swift Sources/Diriger/MenuBarView.swift
 git commit -m "Key shortcut names by ProfileIdentity"
 ```
 
