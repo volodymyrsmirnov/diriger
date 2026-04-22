@@ -532,8 +532,15 @@ Replace `appendRule()` and `addAfter(id:)` (lines 65–77):
 Replace `RuleRow.profileMissing`, `profileMenu`, `profileLabel` (lines 91–189):
 
 ```swift
+    private var isIdentityUnset: Bool {
+        switch rule.profileIdentity {
+        case .directory(let value): return value.isEmpty
+        case .email(let value): return value.isEmpty
+        }
+    }
+
     private var profileMissing: Bool {
-        rule.profileIdentity.directoryName(in: profiles) == nil
+        !isIdentityUnset && rule.profileIdentity.directoryName(in: profiles) == nil
     }
 
     // ...body unchanged...
@@ -557,9 +564,11 @@ Replace `RuleRow.profileMissing`, `profileMenu`, `profileLabel` (lines 91–189)
            let profile = profiles.first(where: { $0.directoryName == directory }) {
             return profile.displayName
         }
-        return "Missing"
+        return isIdentityUnset ? "Select profile" : "Missing"
     }
 ```
+
+(An empty-string identity — which is how freshly-created rules come out before the user picks a profile — must read as "unset" (neutral placeholder), not "missing on this Mac" (red). `isIdentityUnset` draws that distinction so `profileMissing` stays `false` until a real identity is assigned.)
 
 (Apply surgically; leave the rest of `RuleRow` — body, buttons, pattern field — unchanged.)
 
