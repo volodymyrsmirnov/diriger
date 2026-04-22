@@ -180,6 +180,7 @@ final class SyncedDefaults {
 
     private var kvsObserver: NSObjectProtocol?
     private var appActiveObserver: NSObjectProtocol?
+    private var libraryObservers: [SyncedKey: DefaultsKVO] = [:]
 
     private func attachNotifications() {
         kvsObserver = NotificationCenter.default.addObserver(
@@ -241,4 +242,51 @@ final class SyncedDefaults {
 
 extension SyncedDefaults {
     static let shared = SyncedDefaults()
+}
+
+extension SyncedDefaults {
+    /// For library-owned keys we don't write ourselves (e.g., KeyboardShortcuts),
+    /// install a KVO observer on the local UserDefaults so we can stamp mtime and push.
+    func observeLibraryOwnedKey(_ key: SyncedKey) {
+        precondition(!key.ownedByApp)
+        let obs = DefaultsKVO(key: key.name) { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.recordLocalWrite(key)
+                self.pushWrite(key)
+            }
+        }
+        libraryObservers[key] = obs
+    }
+
+    func stopObservingLibraryOwnedKey(_ key: SyncedKey) {
+        libraryObservers[key] = nil
+    }
+}
+
+// Small KVO wrapper — lifetime tied to this object, which is stored in the dictionary above.
+@MainActor
+private final class DefaultsKVO: NSObject {
+    nonisolated let key: String
+    private let onChange: @MainActor () -> Void
+
+    init(key: String, onChange: @escaping @MainActor () -> Void) {
+        self.key = key
+        self.onChange = onChange
+        super.init()
+        UserDefaults.standard.addObserver(self, forKeyPath: key, options: [.new], context: nil)
+    }
+
+    deinit {
+        UserDefaults.standard.removeObserver(self, forKeyPath: key)
+    }
+
+    override func observeValue(
+        forKeyPath _: String?,
+        of _: Any?,
+        change _: [NSKeyValueChangeKey: Any]?,
+        context _: UnsafeMutableRawPointer?
+    ) {
+        Task { @MainActor in self.onChange() }
+    }
 }

@@ -8,21 +8,56 @@ final class ProfileManager {
     var profiles: [ChromeProfile] = []
 
     private let watcher: ChromeLocalStateWatcher
+    private var remoteObserver: NSObjectProtocol?
+    private var registeredShortcutKeys: Set<SyncedKey> = []
 
     init() {
         let watcher = ChromeLocalStateWatcher()
         self.watcher = watcher
-        // All stored properties are set; safe to capture self.
         watcher.onChange = { [weak self] in
             Task { @MainActor in await self?.loadProfiles() }
         }
         Task { await loadProfiles() }
         watcher.start()
+
+        remoteObserver = NotificationCenter.default.addObserver(
+            forName: SyncedDefaults.keyDidChangeRemotelyNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            let name = (note.userInfo?["key"] as? String) ?? ""
+            MainActor.assumeIsolated {
+                guard name.hasPrefix("KeyboardShortcuts_profile_shortcut_") else { return }
+                self?.registerShortcuts()
+            }
+        }
     }
+
+    // No deinit cleanup: Swift 6 strict concurrency disallows touching @MainActor-isolated
+    // observer tokens from a nonisolated deinit, and this class is app-lifetime. The
+    // notification closure uses [weak self] so post-deallocation firings are no-ops.
 
     func loadProfiles() async {
         profiles = await ChromeProfileService.loadProfiles()
+        updateSyncedShortcutRegistrations()
         registerShortcuts()
+    }
+
+    private func updateSyncedShortcutRegistrations() {
+        let desired: Set<SyncedKey> = Set(
+            profiles.prefix(KeyboardShortcuts.Name.maxSlots).map { profile in
+                SyncedKey.profileShortcut(for: ProfileIdentity.forProfile(profile))
+            }
+        )
+
+        for key in desired.subtracting(registeredShortcutKeys) {
+            SyncedDefaults.shared.register(key)
+            SyncedDefaults.shared.observeLibraryOwnedKey(key)
+        }
+        for key in registeredShortcutKeys.subtracting(desired) {
+            SyncedDefaults.shared.stopObservingLibraryOwnedKey(key)
+        }
+        registeredShortcutKeys = desired
     }
 
     private func registerShortcuts() {
