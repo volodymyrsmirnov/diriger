@@ -4,27 +4,13 @@ import ApplicationServices
 import KeyboardShortcuts
 import ServiceManagement
 
-private struct DefaultBrowserState {
-    var isDefault: Bool
-    var currentName: String?
-    var error: String?
-
-    static func read() -> Self {
-        Self(
-            isDefault: DefaultBrowserService.isDefaultBrowser(),
-            currentName: DefaultBrowserService.currentHandlerDisplayName(),
-            error: nil
-        )
-    }
-}
-
 struct SettingsView: View {
     @Environment(ProfileManager.self) private var profileManager
     @Environment(RuleStore.self) private var ruleStore
+    @Environment(DefaultBrowserMonitor.self) private var browserMonitor
 
     @State private var launchAtLogin = SettingsView.readLaunchAtLogin()
     @State private var launchAtLoginError: String?
-    @State private var browserState = DefaultBrowserState.read()
     @State private var axGranted = AXIsProcessTrusted()
     @State private var syncEnabled = SyncedDefaults.shared.isEnabled
     @State private var iCloudSignedIn = FileManager.default.ubiquityIdentityToken != nil
@@ -41,7 +27,7 @@ struct SettingsView: View {
         .frame(width: 760, height: 720)
         .onAppear {
             launchAtLogin = SettingsView.readLaunchAtLogin()
-            refreshDefaultBrowserState()
+            browserMonitor.refresh()
             iCloudSignedIn = FileManager.default.ubiquityIdentityToken != nil
             // Diriger is LSUIElement so `NSApplication.didBecomeActiveNotification`
             // rarely fires; Settings-open is our deterministic pull-on-foreground trigger.
@@ -52,7 +38,7 @@ struct SettingsView: View {
         .onReceive(NotificationCenter.default.publisher(
             for: NSApplication.didBecomeActiveNotification
         )) { _ in
-            refreshDefaultBrowserState()
+            browserMonitor.refresh()
             axGranted = AXIsProcessTrusted()
             iCloudSignedIn = FileManager.default.ubiquityIdentityToken != nil
         }
@@ -143,13 +129,13 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Use Diriger to open web links")
                     Text(
-                        "Current default: \(browserState.currentName ?? "Unknown"). Turning this off hands the role back to another installed browser."
+                        "Current default: \(browserMonitor.currentName ?? "Unknown"). Turning this off hands the role back to another installed browser."
                     )
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 }
             }
-            if let error = browserState.error {
+            if let error = browserMonitor.error {
                 Text(error)
                     .font(.caption)
                     .foregroundStyle(.red)
@@ -169,8 +155,8 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
                 RulesTableView()
             }
-            .opacity(browserState.isDefault ? 1.0 : 0.5)
-            .disabled(!browserState.isDefault)
+            .opacity(browserMonitor.isDefault ? 1.0 : 0.5)
+            .disabled(!browserMonitor.isDefault)
         } header: {
             Text("Routing Rules")
         }
@@ -199,7 +185,7 @@ struct SettingsView: View {
 
     private var defaultBrowserBinding: Binding<Bool> {
         Binding(
-            get: { browserState.isDefault },
+            get: { browserMonitor.isDefault },
             set: { newValue in applyDefaultBrowser(newValue) }
         )
     }
@@ -220,7 +206,7 @@ struct SettingsView: View {
     }
 
     private func applyDefaultBrowser(_ newValue: Bool) {
-        browserState.error = nil
+        browserMonitor.error = nil
         Task {
             var capturedError: String?
             do {
@@ -233,13 +219,9 @@ struct SettingsView: View {
                 Log.browser.error("Default browser toggle failed: \(error.localizedDescription, privacy: .public)")
                 capturedError = error.localizedDescription
             }
-            browserState = DefaultBrowserState.read()
-            browserState.error = capturedError
+            browserMonitor.refresh()
+            browserMonitor.error = capturedError
         }
-    }
-
-    private func refreshDefaultBrowserState() {
-        browserState = DefaultBrowserState.read()
     }
 
     private static func readLaunchAtLogin() -> Bool {

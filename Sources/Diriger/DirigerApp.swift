@@ -96,6 +96,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let profileManager: ProfileManager
     let ruleStore: RuleStore
     let linkPicker: LinkPickerController
+    let recentLinks: RecentLinksStore
+    let browserMonitor: DefaultBrowserMonitor
 
     override init() {
         // Migration MUST run before RuleStore initializes — RuleStore caches rules
@@ -106,6 +108,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.profileManager = pm
         self.ruleStore = RuleStore()
         self.linkPicker = LinkPickerController(profileManager: pm)
+        self.recentLinks = RecentLinksStore()
+        self.browserMonitor = DefaultBrowserMonitor()
         super.init()
     }
 
@@ -131,6 +135,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Log.app.info("Ignoring non-http(s) URL event")
             return
         }
+
+        recentLinks.record(url)
 
         let sourcePID = event
             .attributeDescriptor(forKeyword: AEKeyword(keySenderPIDAttr))?
@@ -168,14 +174,19 @@ struct DirigerApp: App {
 
     var body: some Scene {
         MenuBarExtra("Diriger", systemImage: "wand.and.outline") {
-            MenuBarView()
+            MenuBarView(openInPicker: { [linkPicker = appDelegate.linkPicker] url in
+                linkPicker.present(url: url)
+            })
                 .environment(appDelegate.profileManager)
+                .environment(appDelegate.recentLinks)
+                .environment(appDelegate.browserMonitor)
         }
 
         Settings {
             SettingsView()
                 .environment(appDelegate.profileManager)
                 .environment(appDelegate.ruleStore)
+                .environment(appDelegate.browserMonitor)
         }
     }
 }

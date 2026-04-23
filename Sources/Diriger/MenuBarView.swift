@@ -4,7 +4,11 @@ import KeyboardShortcuts
 
 struct MenuBarView: View {
     @Environment(ProfileManager.self) private var profileManager
+    @Environment(RecentLinksStore.self) private var recentLinks
+    @Environment(DefaultBrowserMonitor.self) private var browserMonitor
     @Environment(\.openSettings) private var openSettings
+
+    let openInPicker: (URL) -> Void
 
     var body: some View {
         if profileManager.profiles.isEmpty {
@@ -29,6 +33,29 @@ struct MenuBarView: View {
                     }
                 }
                 .badge(shortcutLabel(for: profile))
+            }
+        }
+
+        if browserMonitor.isDefault {
+            Divider()
+
+            Section("Recent Links") {
+                if recentLinks.links.isEmpty {
+                    Text("No recent links")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(recentLinks.links, id: \.self) { url in
+                        Button {
+                            openInPicker(url)
+                        } label: {
+                            Label {
+                                Text(recentLinkLabel(for: url))
+                            } icon: {
+                                Image(systemName: "link")
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -69,5 +96,12 @@ struct MenuBarView: View {
         } else {
             Image(systemName: "person.circle.fill")
         }
+    }
+
+    private func recentLinkLabel(for url: URL) -> String {
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        components?.scheme = nil
+        let raw = components?.string ?? url.absoluteString
+        return raw.hasPrefix("//") ? String(raw.dropFirst(2)) : raw
     }
 }
