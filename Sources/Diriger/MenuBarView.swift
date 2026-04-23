@@ -50,9 +50,6 @@ struct MenuBarView: View {
                         } label: {
                             Label {
                                 Text(recentLinkLabel(for: url))
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                                    .frame(maxWidth: 380, alignment: .leading)
                             } icon: {
                                 Image(systemName: "link")
                             }
@@ -105,6 +102,15 @@ struct MenuBarView: View {
         var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         components?.scheme = nil
         let raw = components?.string ?? url.absoluteString
-        return raw.hasPrefix("//") ? String(raw.dropFirst(2)) : raw
+        let stripped = raw.hasPrefix("//") ? String(raw.dropFirst(2)) : raw
+        return truncateMiddle(stripped, limit: 60)
+    }
+
+    private func truncateMiddle(_ s: String, limit: Int) -> String {
+        guard s.count > limit else { return s }
+        let keep = limit - 1
+        let head = keep / 2 + keep % 2
+        let tail = keep / 2
+        return s.prefix(head) + "…" + s.suffix(tail)
     }
 }
