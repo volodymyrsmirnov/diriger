@@ -50,6 +50,9 @@ struct MenuBarView: View {
                         } label: {
                             Label {
                                 Text(recentLinkLabel(for: url))
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                    .frame(maxWidth: 380, alignment: .leading)
                             } icon: {
                                 Image(systemName: "link")
                             }
