@@ -52,6 +52,7 @@ enum ChromeLauncher {
         ]
         do {
             try process.run()
+            raiseProfileWindow(profile)
             return
         } catch {
             Log.chrome
@@ -68,8 +69,23 @@ enum ChromeLauncher {
                 withApplicationAt: chromeURL,
                 configuration: config
             )
+            raiseProfileWindow(profile)
         } catch {
             throw LaunchError.chromeLaunchFailed(underlying: error)
+        }
+    }
+
+    // Activating Chrome alone can leave a different profile's window frontmost;
+    // clicking the Profiles menu item is what raises the target profile's window.
+    // Best-effort: if AX isn't granted or Chrome isn't listed yet, we only log.
+    private static func raiseProfileWindow(_ profile: ChromeProfile) {
+        guard AXIsProcessTrusted(), let chromeApp = findAndActivateChrome() else { return }
+        do {
+            try selectProfileFromMenu(profile, pid: chromeApp.processIdentifier)
+        } catch {
+            Log.chrome.error(
+                "raiseProfileWindow AX click failed: \(error.localizedDescription, privacy: .public)"
+            )
         }
     }
 
@@ -84,17 +100,20 @@ enum ChromeLauncher {
             throw LaunchError.accessibilityDenied
         }
 
-        let chromeApp = NSWorkspace.shared.runningApplications.first {
-            $0.bundleIdentifier == chromeBundleID
-        }
-
-        guard let chromeApp else {
+        guard let chromeApp = findAndActivateChrome() else {
             try await launchChrome(at: chromeURL, profile: profile)
             return
         }
 
-        chromeApp.activate()
         try selectProfileFromMenu(profile, pid: chromeApp.processIdentifier)
+    }
+
+    private static func findAndActivateChrome() -> NSRunningApplication? {
+        guard let chromeApp = NSWorkspace.shared.runningApplications.first(
+            where: { $0.bundleIdentifier == chromeBundleID }
+        ) else { return nil }
+        chromeApp.activate()
+        return chromeApp
     }
 
     private static func launchChrome(at chromeURL: URL, profile: ChromeProfile) async throws {
