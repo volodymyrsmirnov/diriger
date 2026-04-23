@@ -136,14 +136,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        recentLinks.record(url)
-
         let sourcePID = event
             .attributeDescriptor(forKeyword: AEKeyword(keySenderPIDAttr))?
             .int32Value
         let sourceBundleID = sourcePID.flatMap {
             NSRunningApplication(processIdentifier: pid_t($0))?.bundleIdentifier
         }
+
+        recentLinks.record(url, sourceBundleID: sourceBundleID)
 
         let bypassRules = NSEvent.modifierFlags.contains(.shift)
         let matched = bypassRules ? nil : RuleEngine.firstMatch(

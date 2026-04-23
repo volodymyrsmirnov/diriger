@@ -44,14 +44,14 @@ struct MenuBarView: View {
                     Text("No recent links")
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(recentLinks.links, id: \.self) { url in
+                    ForEach(recentLinks.links, id: \.self) { link in
                         Button {
-                            openInPicker(url)
+                            openInPicker(link.url)
                         } label: {
                             Label {
-                                Text(recentLinkLabel(for: url))
+                                Text(recentLinkLabel(for: link.url))
                             } icon: {
-                                Image(systemName: "link")
+                                recentLinkIcon(for: link)
                             }
                         }
                     }
@@ -95,6 +95,16 @@ struct MenuBarView: View {
             Image(nsImage: image)
         } else {
             Image(systemName: "person.circle.fill")
+        }
+    }
+
+    @ViewBuilder
+    private func recentLinkIcon(for link: RecentLink) -> some View {
+        if let bundleID = link.sourceBundleID,
+           let image = AppIconProvider.icon(forBundleID: bundleID, size: NSSize(width: 18, height: 18)) {
+            Image(nsImage: image)
+        } else {
+            Image(systemName: "link")
         }
     }
 

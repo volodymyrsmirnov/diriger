@@ -324,9 +324,9 @@ private struct SourcePattern: View {
     @ViewBuilder
     private var appIcon: some View {
         if !rule.pattern.isEmpty,
-           let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: rule.pattern)
+           let image = AppIconProvider.icon(forBundleID: rule.pattern)
         {
-            Image(nsImage: NSWorkspace.shared.icon(forFile: appURL.path))
+            Image(nsImage: image)
                 .resizable()
         } else {
             Image(systemName: "app.dashed")
