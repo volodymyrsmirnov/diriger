@@ -24,7 +24,9 @@ struct SettingsView: View {
             versionFooter
         }
         .formStyle(.grouped)
-        .frame(minWidth: 640, idealWidth: 760, minHeight: 520, idealHeight: 720)
+        .scrollContentBackground(.hidden)
+        .frame(minWidth: 540, idealWidth: 540, minHeight: 520, idealHeight: 720)
+        .background(SettingsWindowConfigurator())
         .onAppear {
             launchAtLogin = SettingsView.readLaunchAtLogin()
             browserMonitor.refresh()
@@ -227,5 +229,53 @@ struct SettingsView: View {
     private static func readLaunchAtLogin() -> Bool {
         let status = SMAppService.mainApp.status
         return status == .enabled || status == .requiresApproval
+    }
+}
+
+/// Hooks into the Settings NSWindow once SwiftUI mounts the view: centers it,
+/// floats it above other windows for the lifetime of the session, and installs
+/// a translucent vibrancy backdrop so the form sections sit on a soft material.
+private struct SettingsWindowConfigurator: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        // .window is nil at makeNSView time; defer to the next runloop turn.
+        Task { @MainActor in
+            guard let window = view.window else { return }
+            configure(window)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    @MainActor
+    private func configure(_ window: NSWindow) {
+        window.level = .floating
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        installBackdrop(in: window)
+        // Center on the screen the window currently lives on.
+        window.center()
+    }
+
+    @MainActor
+    private func installBackdrop(in window: NSWindow) {
+        guard let contentView = window.contentView else { return }
+        let identifier = NSUserInterfaceItemIdentifier("diriger.settings.backdrop")
+        if contentView.subviews.contains(where: { $0.identifier == identifier }) { return }
+
+        let backdrop = NSVisualEffectView()
+        backdrop.identifier = identifier
+        backdrop.material = .windowBackground
+        backdrop.blendingMode = .behindWindow
+        backdrop.state = .active
+        backdrop.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(backdrop, positioned: .below, relativeTo: nil)
+        NSLayoutConstraint.activate([
+            backdrop.topAnchor.constraint(equalTo: contentView.topAnchor),
+            backdrop.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+            backdrop.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            backdrop.trailingAnchor.constraint(equalTo: contentView.trailingAnchor)
+        ])
     }
 }
