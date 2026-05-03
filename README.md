@@ -19,8 +19,8 @@ A lightweight macOS menu bar app for working with multiple Google Chrome profile
 ## Requirements
 
 - macOS 14.0+
-- Google Chrome (English-language menu bar; see *Limitations* below)
-- Accessibility permission (prompted on first profile switch — needed to click Chrome's Profiles menu)
+- Google Chrome
+- Accessibility permission (prompted on first profile switch — needed to activate the matching profile window in a running Chrome)
 
 ## Development
 
@@ -72,11 +72,10 @@ Rules are only consulted when Diriger is the default browser. The Routing Rules 
 Diriger reads Chrome's profile data from `~/Library/Application Support/Google/Chrome/Local State`.
 
 - **Chrome not running**: launches Chrome with `--profile-directory` to open the correct profile.
-- **Chrome running**: activates Chrome, then uses the Accessibility API to click the matching item in Chrome's Profiles menu. This is why the Accessibility permission is required.
+- **Chrome running**: activates Chrome, then uses the Accessibility API to find and press the matching profile menu item by its Cocoa selector identifier (`switchToProfileFromMenu:`). The identifier is language-independent, so this works regardless of Chrome's UI language.
 
 ## Limitations
 
-- Profile switching clicks Chrome's "Profiles" menu by title and therefore requires Chrome to be running in English. If your Chrome UI is in another language, open links still work (they go via the CLI flag) but the menu-bar profile switcher won't.
 - Diriger supports up to ten profile shortcuts (keys 1–9, 0). Additional profiles still appear in the menu bar and picker but can't have bound shortcuts.
 - Chrome Beta / Canary / Dev / Chromium forks are not supported — Diriger targets stable Google Chrome (`com.google.Chrome`).
 
