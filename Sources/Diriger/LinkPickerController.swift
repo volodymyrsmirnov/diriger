@@ -126,7 +126,7 @@ final class LinkPickerController {
         globalClickMonitor = NSEvent.addGlobalMonitorForEvents(
             matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
         ) { [weak self] _ in
-            Task { @MainActor in self?.cancel() }
+            MainActor.assumeIsolated { self?.cancel() }
         }
 
         resignObserver = NotificationCenter.default.addObserver(
@@ -134,7 +134,7 @@ final class LinkPickerController {
             object: panel,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in self?.cancel() }
+            MainActor.assumeIsolated { self?.cancel() }
         }
     }
 

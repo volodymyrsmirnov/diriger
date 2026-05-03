@@ -24,7 +24,7 @@ struct SettingsView: View {
             versionFooter
         }
         .formStyle(.grouped)
-        .frame(width: 760, height: 720)
+        .frame(minWidth: 640, idealWidth: 760, minHeight: 520, idealHeight: 720)
         .onAppear {
             launchAtLogin = SettingsView.readLaunchAtLogin()
             browserMonitor.refresh()

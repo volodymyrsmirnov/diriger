@@ -18,7 +18,7 @@ final class DefaultBrowserMonitor {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in self?.refresh() }
+            MainActor.assumeIsolated { self?.refresh() }
         }
     }
 

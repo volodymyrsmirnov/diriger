@@ -75,12 +75,10 @@ struct MenuBarView: View {
         .keyboardShortcut("q")
     }
 
-    private func shortcutLabel(for profile: ChromeProfile) -> Text {
+    private func shortcutLabel(for profile: ChromeProfile) -> Text? {
         let name = KeyboardShortcuts.Name.forProfile(ProfileIdentity.forProfile(profile))
-        if let shortcut = KeyboardShortcuts.getShortcut(for: name) {
-            return Text(shortcut.description)
-        }
-        return Text("")
+        guard let shortcut = KeyboardShortcuts.getShortcut(for: name) else { return nil }
+        return Text(shortcut.description)
     }
 
     private func profileLabel(for profile: ChromeProfile) -> String {

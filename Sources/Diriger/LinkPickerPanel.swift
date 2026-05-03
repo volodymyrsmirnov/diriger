@@ -99,17 +99,19 @@ struct LinkPickerView: View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(spacing: 2) {
                 ForEach(Array(profiles.enumerated()), id: \.element.id) { index, profile in
-                    ProfileRow(
-                        profile: profile,
-                        number: index + 1,
-                        isSelected: index == selection
-                    )
+                    Button {
+                        onActivate(index)
+                    } label: {
+                        ProfileRow(
+                            profile: profile,
+                            number: index + 1,
+                            isSelected: index == selection
+                        )
+                    }
+                    .buttonStyle(.plain)
                     .contentShape(Rectangle())
                     .onHover { hovering in
                         if hovering { selection = index }
-                    }
-                    .onTapGesture {
-                        onActivate(index)
                     }
                 }
             }

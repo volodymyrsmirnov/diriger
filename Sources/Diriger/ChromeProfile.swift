@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-struct ChromeProfile: Identifiable, Hashable {
+struct ChromeProfile: Identifiable, Hashable, Sendable {
     let directoryName: String
     let displayName: String
     let email: String

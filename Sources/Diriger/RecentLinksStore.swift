@@ -15,7 +15,7 @@ final class RecentLinksStore {
         links.removeAll { $0.url == url }
         links.insert(RecentLink(url: url, sourceBundleID: sourceBundleID), at: 0)
         if links.count > maxCount {
-            links.removeLast(links.count - maxCount)
+            links = Array(links.prefix(maxCount))
         }
     }
 }

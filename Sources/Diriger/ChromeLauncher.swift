@@ -1,4 +1,7 @@
 import AppKit
+// AX C APIs (AXUIElementCopyAttributeValue, AXUIElementPerformAction, etc.) are
+// thread-safe per Apple's documentation, but ApplicationServices ships without
+// full Sendable annotations. Drop @preconcurrency once the SDK adopts them.
 @preconcurrency import ApplicationServices
 
 @MainActor
@@ -52,7 +55,7 @@ enum ChromeLauncher {
         ]
         do {
             try process.run()
-            raiseProfileWindow(profile)
+            await raiseProfileWindow(profile)
             return
         } catch {
             Log.chrome
@@ -69,7 +72,7 @@ enum ChromeLauncher {
                 withApplicationAt: chromeURL,
                 configuration: config
             )
-            raiseProfileWindow(profile)
+            await raiseProfileWindow(profile)
         } catch {
             throw LaunchError.chromeLaunchFailed(underlying: error)
         }
@@ -78,10 +81,10 @@ enum ChromeLauncher {
     // Activating Chrome alone can leave a different profile's window frontmost;
     // clicking the Profiles menu item is what raises the target profile's window.
     // Best-effort: if AX isn't granted or Chrome isn't listed yet, we only log.
-    private static func raiseProfileWindow(_ profile: ChromeProfile) {
+    private static func raiseProfileWindow(_ profile: ChromeProfile) async {
         guard AXIsProcessTrusted(), let chromeApp = findAndActivateChrome() else { return }
         do {
-            try selectProfileFromMenu(profile, pid: chromeApp.processIdentifier)
+            try await selectProfileFromMenu(profile, pid: chromeApp.processIdentifier)
         } catch {
             Log.chrome.error(
                 "raiseProfileWindow AX click failed: \(error.localizedDescription, privacy: .public)"
@@ -105,7 +108,7 @@ enum ChromeLauncher {
             return
         }
 
-        try selectProfileFromMenu(profile, pid: chromeApp.processIdentifier)
+        try await selectProfileFromMenu(profile, pid: chromeApp.processIdentifier)
     }
 
     private static func findAndActivateChrome() -> NSRunningApplication? {
@@ -126,7 +129,10 @@ enum ChromeLauncher {
         }
     }
 
-    private static func selectProfileFromMenu(_ profile: ChromeProfile, pid: pid_t) throws {
+    // AX traversal hops off MainActor: AXUIElement* APIs are thread-safe and the
+    // cross-process IPC for menu walking can take tens of ms, which would otherwise
+    // stall the UI.
+    nonisolated private static func selectProfileFromMenu(_ profile: ChromeProfile, pid: pid_t) async throws {
         let app = AXUIElementCreateApplication(pid)
         guard let menuBar: AXUIElement = axAttribute(of: app, key: kAXMenuBarAttribute) else {
             throw LaunchError.profileItemNotFound(displayName: profile.displayName)
@@ -147,7 +153,7 @@ enum ChromeLauncher {
         AXUIElementPerformAction(target, kAXPressAction as CFString)
     }
 
-    private static func walkMenuTree(_ element: AXUIElement, visit: (AXUIElement) -> Void) {
+    nonisolated private static func walkMenuTree(_ element: AXUIElement, visit: (AXUIElement) -> Void) {
         visit(element)
         guard let children: [AXUIElement] = axAttribute(of: element, key: kAXChildrenAttribute) else {
             return
@@ -157,21 +163,21 @@ enum ChromeLauncher {
         }
     }
 
-    private static let profileMenuItemIdentifier = "switchToProfileFromMenu:"
+    nonisolated private static let profileMenuItemIdentifier = "switchToProfileFromMenu:"
 
     // MARK: - Accessibility helpers
 
-    private static func axAttribute<T>(of element: AXUIElement, key: String) -> T? {
+    nonisolated private static func axAttribute<T>(of element: AXUIElement, key: String) -> T? {
         var ref: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, key as CFString, &ref) == .success else { return nil }
         return ref as? T
     }
 
-    private static func axTitle(of element: AXUIElement) -> String? {
+    nonisolated private static func axTitle(of element: AXUIElement) -> String? {
         axAttribute(of: element, key: kAXTitleAttribute)
     }
 
-    private static func axIdentifier(of element: AXUIElement) -> String? {
+    nonisolated private static func axIdentifier(of element: AXUIElement) -> String? {
         axAttribute(of: element, key: kAXIdentifierAttribute)
     }
 }

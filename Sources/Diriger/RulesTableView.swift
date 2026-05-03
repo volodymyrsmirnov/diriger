@@ -36,30 +36,26 @@ struct RulesTableView: View {
 
     private var rowsList: some View {
         VStack(spacing: 6) {
-            ForEach(Array(store.rules.enumerated()), id: \.element.id) { index, rule in
+            ForEach(store.rules) { rule in
                 RuleRow(
                     rule: rule,
                     profiles: profileManager.profiles,
-                    canMoveUp: index > 0,
-                    canMoveDown: index < store.rules.count - 1,
+                    canMoveUp: store.rules.first?.id != rule.id,
+                    canMoveDown: store.rules.last?.id != rule.id,
                     onChange: { store.update($0) },
                     onRemove: { store.remove(id: rule.id) },
                     onAddAfter: { addAfter(id: rule.id) },
-                    onMoveUp: {
-                        store.move(
-                            fromOffsets: IndexSet(integer: index),
-                            toOffset: index - 1
-                        )
-                    },
-                    onMoveDown: {
-                        store.move(
-                            fromOffsets: IndexSet(integer: index),
-                            toOffset: index + 2
-                        )
-                    }
+                    onMoveUp: { moveRule(id: rule.id, by: -1) },
+                    onMoveDown: { moveRule(id: rule.id, by: +1) }
                 )
             }
         }
+    }
+
+    private func moveRule(id: RoutingRule.ID, by delta: Int) {
+        guard let index = store.rules.firstIndex(where: { $0.id == id }) else { return }
+        let destination = delta < 0 ? index - 1 : index + 2
+        store.move(fromOffsets: IndexSet(integer: index), toOffset: destination)
     }
 
     private func appendRule() {
@@ -506,11 +502,11 @@ private struct EditableField: NSViewRepresentable {
         }
 
         func controlTextDidBeginEditing(_ obj: Notification) {
-            Task { @MainActor in self.focusBinding.wrappedValue = true }
+            focusBinding.wrappedValue = true
         }
 
         func controlTextDidEndEditing(_ obj: Notification) {
-            Task { @MainActor in self.focusBinding.wrappedValue = false }
+            focusBinding.wrappedValue = false
         }
     }
 }

@@ -15,9 +15,7 @@ struct ProfileAvatar: View {
 
     @ViewBuilder
     private var content: some View {
-        if let url = ChromeProfileService.profilePictureURL(for: profile),
-           let image = NSImage(contentsOf: url)
-        {
+        if let image = ProfileAvatar.sourceImage(for: profile) {
             Image(nsImage: image)
                 .resizable()
                 .interpolation(.high)
@@ -30,10 +28,30 @@ struct ProfileAvatar: View {
             }
         }
     }
+
+    @MainActor
+    private static func sourceImage(for profile: ChromeProfile) -> NSImage? {
+        let key = profile.id as NSString
+        if let cached = avatarSourceCache.object(forKey: key) {
+            return cached
+        }
+        guard let url = ChromeProfileService.profilePictureURL(for: profile),
+              let image = NSImage(contentsOf: url)
+        else { return nil }
+        avatarSourceCache.setObject(image, forKey: key)
+        return image
+    }
+
+    @MainActor
+    static func invalidateImageCache() {
+        avatarSourceCache.removeAllObjects()
+        avatarImageCache.removeAllObjects()
+    }
 }
 
 // MARK: - Rasterization
 
+@MainActor private let avatarSourceCache = NSCache<NSString, NSImage>()
 @MainActor private let avatarImageCache = NSCache<NSString, NSImage>()
 
 extension ProfileAvatar {

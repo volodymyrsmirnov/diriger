@@ -42,6 +42,7 @@ final class ProfileManager {
 
     func loadProfiles() async {
         profiles = await ChromeProfileService.loadProfiles()
+        ProfileAvatar.invalidateImageCache()
         updateSyncedShortcutRegistrations()
         registerShortcuts()
     }

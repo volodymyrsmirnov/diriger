@@ -64,7 +64,7 @@ final class SyncedDefaults {
     /// KVO fires — a set would coalesce them and leak the second echo as a spurious push.
     private var suppressKVOFor: [String: Int] = [:]
     private let debounce: TimeInterval
-    private var pendingWork: [String: DispatchWorkItem] = [:]
+    private var pendingWork: [String: Task<Void, Never>] = [:]
 
     init(
         local: UserDefaults = .standard,
@@ -183,15 +183,12 @@ final class SyncedDefaults {
         }
 
         pendingWork[key.name]?.cancel()
-        let work = DispatchWorkItem { [weak self] in
-            guard let self else { return }
-            MainActor.assumeIsolated {
-                self.pendingWork[key.name] = nil
-                self.reconcile(key)
-            }
+        pendingWork[key.name] = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(self?.debounce ?? 0))
+            guard !Task.isCancelled, let self else { return }
+            self.pendingWork[key.name] = nil
+            self.reconcile(key)
         }
-        pendingWork[key.name] = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + debounce, execute: work)
     }
 
     static let keyDidChangeRemotelyNotification =
