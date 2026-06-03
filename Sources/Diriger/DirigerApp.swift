@@ -122,14 +122,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 forEventClass: AEEventClass(kInternetEventClass),
                 andEventID: AEEventID(kAEGetURL)
             )
+            NSAppleEventManager.shared().setEventHandler(
+                self,
+                andSelector: #selector(handleOpenDocuments(event:replyEvent:)),
+                forEventClass: AEEventClass(kCoreEventClass),
+                andEventID: AEEventID(kAEOpenDocuments)
+            )
             SyncedDefaults.shared.start()
         }
     }
 
-    // http(s) URLs from other apps arrive as GURL Apple Events (our custom handler,
-    // installed above). Local files opened from Finder — e.g. an .html document when
-    // Diriger is the handler — arrive instead through AppKit's kAEOpenDocuments path,
-    // delivered here. Both funnel into route(urls:sourceBundleID:).
+    // http(s) URLs from other apps arrive as GURL Apple Events; this is our custom
+    // handler for them, installed above. Funnels into route(urls:sourceBundleID:).
     @objc
     func handleURL(event: NSAppleEventDescriptor, replyEvent: NSAppleEventDescriptor) {
         guard let urlString = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue,
@@ -143,16 +147,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         route(urls: [url], sourceBundleID: senderBundleID(of: event))
     }
 
-    nonisolated func application(_ application: NSApplication, open urls: [URL]) {
-        MainActor.assumeIsolated {
-            let fileURLs = urls.filter(\.isFileURL)
-            guard !fileURLs.isEmpty else { return }
-            // The kAEOpenDocuments event being processed carries the sending app's PID,
-            // so source-based rules (e.g. "files from Finder") still apply.
-            let sourceBundleID = NSAppleEventManager.shared().currentAppleEvent
-                .flatMap(senderBundleID(of:))
-            route(urls: fileURLs, sourceBundleID: sourceBundleID)
+    // Local files opened from Finder — e.g. an .html document when Diriger is the
+    // handler — arrive as kAEOpenDocuments Apple Events. We install our own handler
+    // rather than relying on NSApplicationDelegate's application(_:open:): for this
+    // LSUIElement/MenuBarExtra app, AppKit's built-in odoc dispatch only fires on a
+    // cold launch, not when Diriger is already running. A custom handler (like the
+    // GURL one) fires in both cases. The event carries the sending app's PID, so
+    // source-based rules (e.g. "files from Finder") still apply.
+    @objc
+    func handleOpenDocuments(event: NSAppleEventDescriptor, replyEvent: NSAppleEventDescriptor) {
+        guard let directObject = event.paramDescriptor(forKeyword: keyDirectObject) else { return }
+        var urls: [URL] = []
+        let count = directObject.numberOfItems
+        if count > 0 {
+            for index in 1 ... count {
+                if let item = directObject.atIndex(index), let url = Self.fileURL(from: item) {
+                    urls.append(url)
+                }
+            }
+        } else if let url = Self.fileURL(from: directObject) {
+            urls.append(url)
         }
+        guard !urls.isEmpty else { return }
+        route(urls: urls, sourceBundleID: senderBundleID(of: event))
+    }
+
+    // An odoc item can be an alias, FSRef, bookmark, etc.; coercing to typeFileURL
+    // normalizes it to a file:// URL string.
+    private static func fileURL(from descriptor: NSAppleEventDescriptor) -> URL? {
+        guard let fileDesc = descriptor.coerce(toDescriptorType: typeFileURL),
+              let urlString = String(data: fileDesc.data, encoding: .utf8)
+        else { return nil }
+        return URL(string: urlString)
     }
 
     private func senderBundleID(of event: NSAppleEventDescriptor) -> String? {
