@@ -89,11 +89,19 @@ final class LinkPickerPanel: NSPanel {
 
 struct LinkPickerView: View {
     let profiles: [ChromeProfile]
-    let url: URL
+    let urls: [URL]
     @Binding var selection: Int
     let onActivate: (Int) -> Void
 
     static let panelWidth: CGFloat = 420
+
+    // file:// URLs read better as a plain path; web URLs keep their full form.
+    private var displayText: String {
+        guard let first = urls.first else { return "" }
+        let primary = first.isFileURL ? first.path : first.absoluteString
+        guard urls.count > 1 else { return primary }
+        return "\(primary)  +\(urls.count - 1) more"
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -122,7 +130,7 @@ struct LinkPickerView: View {
                 .padding(.top, 10)
                 .padding(.horizontal, 16)
 
-            Text(url.absoluteString)
+            Text(displayText)
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)

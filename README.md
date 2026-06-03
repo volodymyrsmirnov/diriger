@@ -7,7 +7,7 @@ A lightweight macOS menu bar app for working with multiple Google Chrome profile
 - **Profile switcher in the menu bar** — every Chrome profile is listed with its picture; click to switch.
 - **Global keyboard shortcuts** — bind a shortcut to each of your first ten profiles.
 - **Launch at login** — optional.
-- **Set Diriger as your default browser** — when another app opens an `http(s)` URL, Diriger decides where it goes.
+- **Set Diriger as your default browser** — when another app opens an `http(s)` URL, or you open a local HTML file from Finder, Diriger decides where it goes.
 - **Routing rules** — pre-defined rules send matching URLs straight to a specific profile. Rule kinds:
   - **Source** — match by the app that opened the link (e.g. Slack → Work profile).
   - **Domain** — exact host (`github.com`) or suffix (`*.example.com`).
@@ -54,7 +54,7 @@ Move the resulting `Diriger.app` to `/Applications`.
 
 ## Using Diriger as your default browser
 
-Open Settings (menu bar → Settings…) and turn on **Use Diriger to open web links**. Any `http(s)` URL from another app is now handed to Diriger, which either applies a matching rule or shows the picker. Turning the toggle off hands the default role back to another installed browser.
+Open Settings (menu bar → Settings…) and turn on **Use Diriger to open web links**. Any `http(s)` URL from another app — and any local HTML file opened from Finder — is now handed to Diriger, which either applies a matching rule or shows the picker. Turning the toggle on also makes Diriger the default app for local HTML files; turning it off hands both roles back to another installed browser.
 
 Rules are only consulted when Diriger is the default browser. The Routing Rules section of Settings is disabled until then.
 

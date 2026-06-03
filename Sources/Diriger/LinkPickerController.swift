@@ -6,7 +6,7 @@ import KeyboardShortcuts
 @Observable
 final class LinkPickerState {
     var profiles: [ChromeProfile] = []
-    var url: URL?
+    var urls: [URL] = []
     var selection: Int = 0
 }
 
@@ -24,14 +24,20 @@ final class LinkPickerController {
     }
 
     func present(url: URL) {
+        present(urls: [url])
+    }
+
+    func present(urls: [URL]) {
+        guard !urls.isEmpty else { return }
         let profiles = Array(profileManager.profiles.prefix(KeyboardShortcuts.Name.maxSlots))
         guard !profiles.isEmpty else {
-            Log.picker.warning("present() called with no profiles; dropping \(url.absoluteString, privacy: .public)")
+            let dropped = urls.map(\.absoluteString).joined(separator: ", ")
+            Log.picker.warning("present() called with no profiles; dropping \(dropped, privacy: .public)")
             return
         }
 
         state.profiles = profiles
-        state.url = url
+        state.urls = urls
         state.selection = 0
 
         let panel = ensurePanel()
@@ -163,12 +169,13 @@ final class LinkPickerController {
     }
 
     private func activate(index: Int) {
-        guard state.profiles.indices.contains(index), let url = state.url else { return }
+        guard state.profiles.indices.contains(index), !state.urls.isEmpty else { return }
         let profile = state.profiles[index]
+        let urls = state.urls
         hide()
         Task {
             do {
-                try await ChromeLauncher.openURL(url, in: profile)
+                try await ChromeLauncher.openURLs(urls, in: profile)
             } catch {
                 Log.chrome.error("openURL failed: \(error.localizedDescription, privacy: .public)")
                 ErrorAlert.present(error)
@@ -177,10 +184,10 @@ final class LinkPickerController {
     }
 
     private func copy() {
-        guard let url = state.url else { return }
+        guard !state.urls.isEmpty else { return }
         let pb = NSPasteboard.general
         pb.clearContents()
-        pb.setString(url.absoluteString, forType: .string)
+        pb.setString(state.urls.map(\.absoluteString).joined(separator: "\n"), forType: .string)
         hide()
     }
 
@@ -201,10 +208,10 @@ struct PickerRoot: View {
     let activate: (Int) -> Void
 
     var body: some View {
-        if let url = state.url {
+        if !state.urls.isEmpty {
             LinkPickerView(
                 profiles: state.profiles,
-                url: url,
+                urls: state.urls,
                 selection: $state.selection,
                 onActivate: activate
             )
