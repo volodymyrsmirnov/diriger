@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import UniformTypeIdentifiers
 
 enum DefaultBrowserService {
     // macOS keeps http and https in sync for the web-browser role; setting
@@ -55,6 +56,22 @@ enum DefaultBrowserService {
                 "setDefaultApplication failed for scheme=\(writeScheme, privacy: .public) at=\(appURL.path, privacy: .public) domain=\(ns.domain, privacy: .public) code=\(ns.code) reason=\(ns.localizedDescription, privacy: .public)"
             )
             throw error
+        }
+        await setDefaultHTMLHandler(appURL: appURL)
+    }
+
+    // Local .html files are routed by their content-type handler, which is separate
+    // from the http(s) scheme handler above. Claiming it alongside the browser role
+    // lets Diriger show the picker for HTML files too. Best-effort: a failure here
+    // shouldn't roll back the primary default-browser change.
+    private static func setDefaultHTMLHandler(appURL: URL) async {
+        do {
+            try await NSWorkspace.shared.setDefaultApplication(at: appURL, toOpen: .html)
+        } catch {
+            let ns = error as NSError
+            Log.browser.error(
+                "setDefaultApplication for public.html failed at=\(appURL.path, privacy: .public) domain=\(ns.domain, privacy: .public) code=\(ns.code) reason=\(ns.localizedDescription, privacy: .public)"
+            )
         }
     }
 

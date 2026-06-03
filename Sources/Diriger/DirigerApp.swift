@@ -126,6 +126,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    // http(s) URLs from other apps arrive as GURL Apple Events (our custom handler,
+    // installed above). Local files opened from Finder — e.g. an .html document when
+    // Diriger is the handler — arrive instead through AppKit's kAEOpenDocuments path,
+    // delivered here. Both funnel into route(urls:sourceBundleID:).
     @objc
     func handleURL(event: NSAppleEventDescriptor, replyEvent: NSAppleEventDescriptor) {
         guard let urlString = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue,
@@ -136,35 +140,59 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Log.app.info("Ignoring non-http(s) URL event")
             return
         }
+        route(urls: [url], sourceBundleID: senderBundleID(of: event))
+    }
 
-        let sourcePID = event
+    nonisolated func application(_ application: NSApplication, open urls: [URL]) {
+        MainActor.assumeIsolated {
+            let fileURLs = urls.filter(\.isFileURL)
+            guard !fileURLs.isEmpty else { return }
+            // The kAEOpenDocuments event being processed carries the sending app's PID,
+            // so source-based rules (e.g. "files from Finder") still apply.
+            let sourceBundleID = NSAppleEventManager.shared().currentAppleEvent
+                .flatMap(senderBundleID(of:))
+            route(urls: fileURLs, sourceBundleID: sourceBundleID)
+        }
+    }
+
+    private func senderBundleID(of event: NSAppleEventDescriptor) -> String? {
+        guard let pid = event
             .attributeDescriptor(forKeyword: AEKeyword(keySenderPIDAttr))?
             .int32Value
-        let sourceBundleID = sourcePID.flatMap {
-            NSRunningApplication(processIdentifier: pid_t($0))?.bundleIdentifier
-        }
+        else { return nil }
+        return NSRunningApplication(processIdentifier: pid_t(pid))?.bundleIdentifier
+    }
 
-        recentLinks.record(url, sourceBundleID: sourceBundleID)
-
+    private func route(urls: [URL], sourceBundleID: String?) {
         let bypassRules = NSEvent.modifierFlags.contains(.shift)
-        let matched = bypassRules ? nil : RuleEngine.firstMatch(
-            in: ruleStore.rules,
-            url: url,
-            sourceBundleID: sourceBundleID,
-            availableProfiles: profileManager.profiles
-        )
-
-        if let profile = matched {
-            Task {
-                do {
-                    try await ChromeLauncher.openURL(url, in: profile)
-                } catch {
-                    Log.chrome.error("openURL failed: \(error.localizedDescription, privacy: .public)")
-                    ErrorAlert.present(error)
-                }
+        var unmatched: [URL] = []
+        for url in urls {
+            recentLinks.record(url, sourceBundleID: sourceBundleID)
+            let matched = bypassRules ? nil : RuleEngine.firstMatch(
+                in: ruleStore.rules,
+                url: url,
+                sourceBundleID: sourceBundleID,
+                availableProfiles: profileManager.profiles
+            )
+            if let profile = matched {
+                openInProfile([url], profile)
+            } else {
+                unmatched.append(url)
             }
-        } else {
-            linkPicker.present(url: url)
+        }
+        if !unmatched.isEmpty {
+            linkPicker.present(urls: unmatched)
+        }
+    }
+
+    private func openInProfile(_ urls: [URL], _ profile: ChromeProfile) {
+        Task {
+            do {
+                try await ChromeLauncher.openURLs(urls, in: profile)
+            } catch {
+                Log.chrome.error("openURL failed: \(error.localizedDescription, privacy: .public)")
+                ErrorAlert.present(error)
+            }
         }
     }
 }

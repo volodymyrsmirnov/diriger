@@ -42,6 +42,11 @@ enum ChromeLauncher {
     }
 
     static func openURL(_ url: URL, in profile: ChromeProfile) async throws {
+        try await openURLs([url], in: profile)
+    }
+
+    static func openURLs(_ urls: [URL], in profile: ChromeProfile) async throws {
+        guard !urls.isEmpty else { return }
         guard let chromeURL = ChromeProfileService.chromeURL() else {
             throw LaunchError.chromeNotInstalled
         }
@@ -49,10 +54,8 @@ enum ChromeLauncher {
 
         let process = Process()
         process.executableURL = binaryURL
-        process.arguments = [
-            "--profile-directory=\(profile.directoryName)",
-            url.absoluteString
-        ]
+        process.arguments = ["--profile-directory=\(profile.directoryName)"]
+            + urls.map(\.absoluteString)
         do {
             try process.run()
             await raiseProfileWindow(profile)
@@ -68,7 +71,7 @@ enum ChromeLauncher {
         config.arguments = ["--profile-directory=\(profile.directoryName)"]
         do {
             _ = try await NSWorkspace.shared.open(
-                [url],
+                urls,
                 withApplicationAt: chromeURL,
                 configuration: config
             )
