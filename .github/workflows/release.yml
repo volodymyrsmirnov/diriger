@@ -4,29 +4,66 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths-ignore:
-      - '**/*.md'
+    paths:
+      - '**.swift'
+      - 'Package.swift'
+      - 'Package.resolved'
+      - 'Resources/**'
+      - 'scripts/**'
+      - '.github/workflows/release.yml'
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: write
 
-concurrency:
-  group: release
-  cancel-in-progress: false
-
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.bump.outputs.tag }}
+      version: ${{ steps.bump.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine next version
+        id: bump
+        run: |
+          latest=$(git tag --list 'v*' --sort=-v:refname | head -n1)
+          if [ -z "$latest" ]; then
+            latest="v1.0.0"
+          fi
+
+          IFS='.' read -r major minor patch <<< "${latest#v}"
+
+          commit_msg=$(git log -1 --pretty=%B)
+          if echo "$commit_msg" | grep -qi '\[major\]'; then
+            major=$((major + 1)); minor=0; patch=0
+          elif echo "$commit_msg" | grep -qi '\[minor\]'; then
+            minor=$((minor + 1)); patch=0
+          else
+            patch=$((patch + 1))
+          fi
+
+          version="${major}.${minor}.${patch}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${version}" >> "$GITHUB_OUTPUT"
+          echo "Next version: v${version}"
+
   release:
+    needs: version
     runs-on: macos-26
     timeout-minutes: 30
     outputs:
-      version: ${{ steps.version.outputs.version }}
       dmg_sha256: ${{ steps.dmg_sha.outputs.sha256 }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Cache SPM build
         uses: actions/cache@v4
@@ -37,35 +74,6 @@ jobs:
           key: ${{ runner.os }}-spm-${{ hashFiles('Package.resolved', 'Package.swift') }}
           restore-keys: |
             ${{ runner.os }}-spm-
-
-      - name: Determine version
-        id: version
-        run: |
-          LATEST_TAG=$(git tag -l 'v*' --sort=-v:refname | head -1)
-          if [ -z "$LATEST_TAG" ]; then
-            LATEST_TAG="v1.0.0"
-          fi
-
-          VERSION="${LATEST_TAG#v}"
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
-
-          COMMIT_MSG=$(git log -1 --pretty=%B)
-          if echo "$COMMIT_MSG" | grep -qi '\[major\]'; then
-            MAJOR=$((MAJOR + 1))
-            MINOR=0
-            PATCH=0
-          elif echo "$COMMIT_MSG" | grep -qi '\[minor\]'; then
-            MINOR=$((MINOR + 1))
-            PATCH=0
-          else
-            PATCH=$((PATCH + 1))
-          fi
-
-          NEW_VERSION="$MAJOR.$MINOR.$PATCH"
-          NEW_TAG="v$NEW_VERSION"
-          echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
-          echo "tag=$NEW_TAG" >> "$GITHUB_OUTPUT"
-          echo "Version: $NEW_VERSION (tag: $NEW_TAG)"
 
       - name: Import signing certificate
         env:
@@ -107,7 +115,7 @@ jobs:
 
       - name: Build and sign
         env:
-          APP_VERSION: ${{ steps.version.outputs.version }}
+          APP_VERSION: ${{ needs.version.outputs.version }}
         run: |
           export SIGNING_IDENTITY="$SIGNING_IDENTITY"
           export ENTITLEMENTS_PATH="$GITHUB_WORKSPACE/Resources/Diriger.entitlements"
@@ -126,7 +134,7 @@ jobs:
           APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
           APPSTORE_PRIVATE_KEY: ${{ secrets.APPSTORE_PRIVATE_KEY }}
         run: |
-          DMG_NAME="Diriger-${{ steps.version.outputs.version }}.dmg"
+          DMG_NAME="Diriger-${{ needs.version.outputs.version }}.dmg"
           DMG_STAGING="$RUNNER_TEMP/dmg-staging"
           rm -rf "$DMG_STAGING"
           mkdir -p "$DMG_STAGING"
@@ -149,11 +157,6 @@ jobs:
 
           echo "DMG_NAME=$DMG_NAME" >> "$GITHUB_ENV"
 
-      - name: Create git tag
-        run: |
-          git tag "${{ steps.version.outputs.tag }}"
-          git push origin "${{ steps.version.outputs.tag }}"
-
       - name: Compute DMG checksum
         id: dmg_sha
         run: echo "sha256=$(shasum -a 256 "$DMG_NAME" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
@@ -162,9 +165,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ steps.version.outputs.tag }}" \
+          gh release create "${{ needs.version.outputs.tag }}" \
             "$DMG_NAME" \
-            --title "Diriger ${{ steps.version.outputs.version }}" \
+            --title "Diriger ${{ needs.version.outputs.version }}" \
             --generate-notes
 
       - name: Cleanup
@@ -176,17 +179,17 @@ jobs:
           rm -f "$RUNNER_TEMP/certificate.p12" "$RUNNER_TEMP/AuthKey.p8" 2>/dev/null || true
 
   homebrew:
-    needs: release
+    needs: [version, release]
     uses: volodymyrsmirnov/homebrew-tap/.github/workflows/update.yml@main
     with:
       type: cask
       name: diriger
-      version: ${{ needs.release.outputs.version }}
+      version: ${{ needs.version.outputs.tag }}
       desc: "Menu bar app for quickly switching between Google Chrome profiles"
       homepage: "https://github.com/volodymyrsmirnov/diriger"
       cask_url: "https://github.com/volodymyrsmirnov/diriger/releases/download/v#{version}/Diriger-#{version}.dmg"
       cask_sha256: ${{ needs.release.outputs.dmg_sha256 }}
       cask_app_name: "Diriger.app"
-      cask_depends_on: 'macos: ">= :sonoma"'
+      cask_depends_on: 'macos: :sonoma'
     secrets:
       tap_token: ${{ secrets.TAP_GITHUB_TOKEN }}
