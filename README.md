@@ -21,6 +21,21 @@ A lightweight macOS menu bar app for working with multiple Google Chrome profile
 - macOS 14.0+
 - Google Chrome
 - Accessibility permission (prompted on first profile switch — needed to activate the matching profile window in a running Chrome)
+- On macOS 27 and later: access to Google Chrome's app data (see below)
+
+### macOS 27: allow access to Chrome's data
+
+macOS 27 protects Google Chrome's data folder (`~/Library/Application Support/Google/Chrome`) from other apps. Until Diriger is allowed in, it can't read Chrome's profile list and shows **No Chrome profiles found**.
+
+To fix it:
+
+1. Open **System Settings → Privacy & Security → Files & Folders**.
+2. Expand **Diriger.app** and turn on **Google Chrome.app**.
+3. Quit and relaunch Diriger. The profiles appear after the restart.
+
+![Files & Folders settings with Google Chrome.app enabled under Diriger.app](docs/images/macos27-files-and-folders.png)
+
+That's the only change needed. Routing rules and shortcuts stay as they were.
 
 ## Development
 
