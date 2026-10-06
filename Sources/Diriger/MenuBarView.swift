@@ -11,7 +11,14 @@ struct MenuBarView: View {
     let openInPicker: (URL) -> Void
 
     var body: some View {
-        if profileManager.profiles.isEmpty {
+        if profileManager.chromeAccessDenied {
+            Text("Diriger can't read Chrome's profiles")
+                .foregroundStyle(.secondary)
+            Button("Allow Access in Settings…") {
+                openSettings()
+                NSApp.activate(ignoringOtherApps: true)
+            }
+        } else if profileManager.profiles.isEmpty {
             Text("No Chrome profiles found")
                 .foregroundStyle(.secondary)
         } else {

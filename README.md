@@ -25,7 +25,7 @@ A lightweight macOS menu bar app for working with multiple Google Chrome profile
 
 ### macOS 27: allow access to Chrome's data
 
-macOS 27 protects Google Chrome's data folder (`~/Library/Application Support/Google/Chrome`) from other apps. Until Diriger is allowed in, it can't read Chrome's profile list and shows **No Chrome profiles found**.
+macOS 27 protects Google Chrome's data folder (`~/Library/Application Support/Google/Chrome`) from other apps. Until Diriger is allowed in, it can't read Chrome's profile list. The menu bar and Settings then say **Diriger can't read Chrome's profiles**, and Settings offers **Open Privacy & Security…** and **Relaunch Diriger** buttons for the steps below.
 
 To fix it:
 

@@ -119,6 +119,45 @@ final class ChromeProfileServiceTests: XCTestCase {
         XCTAssertEqual(profiles.map(\.email), ["x@y.com"])
     }
 
+    func test_load_missingFile_isNotAccessDenied() {
+        let url = tempDir.appendingPathComponent("does-not-exist")
+        let result = ChromeProfileService.load(localStateURL: url)
+        XCTAssertTrue(result.profiles.isEmpty)
+        XCTAssertFalse(result.accessDenied)
+    }
+
+    func test_load_unreadableFile_isAccessDenied() throws {
+        let url = tempDir.appendingPathComponent("Local State")
+        try jsonData(["profile": ["info_cache": [String: Any]()]]).write(to: url)
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: url.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path) }
+
+        let result = ChromeProfileService.load(localStateURL: url)
+
+        XCTAssertTrue(result.profiles.isEmpty)
+        XCTAssertTrue(result.accessDenied)
+    }
+
+    // MARK: - isAccessDenied
+
+    func test_isAccessDenied_cocoaNoPermission() {
+        let error = NSError(domain: NSCocoaErrorDomain, code: NSFileReadNoPermissionError)
+        XCTAssertTrue(ChromeProfileService.isAccessDenied(error))
+    }
+
+    func test_isAccessDenied_underlyingPOSIXEPERM() {
+        let underlying = NSError(domain: NSPOSIXErrorDomain, code: Int(EPERM))
+        let error = NSError(domain: NSCocoaErrorDomain, code: NSFileReadUnknownError, userInfo: [
+            NSUnderlyingErrorKey: underlying
+        ])
+        XCTAssertTrue(ChromeProfileService.isAccessDenied(error))
+    }
+
+    func test_isAccessDenied_fileNotFound_isFalse() {
+        let error = NSError(domain: NSCocoaErrorDomain, code: NSFileReadNoSuchFileError)
+        XCTAssertFalse(ChromeProfileService.isAccessDenied(error))
+    }
+
     func test_loadProfiles_missingFile_returnsEmpty() async {
         let url = tempDir.appendingPathComponent("does-not-exist")
         let profiles = await ChromeProfileService.loadProfiles(localStateURL: url)

@@ -96,7 +96,9 @@ struct SettingsView: View {
 
     private var profileShortcutsSection: some View {
         Section("Profile Shortcuts") {
-            if profileManager.profiles.isEmpty {
+            if profileManager.chromeAccessDenied {
+                chromeAccessDeniedNotice
+            } else if profileManager.profiles.isEmpty {
                 Text("No Chrome profiles found.")
                     .foregroundStyle(.secondary)
             } else {
@@ -122,6 +124,29 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+
+    private var chromeAccessDeniedNotice: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Diriger can't read Chrome's profiles", systemImage: "exclamationmark.triangle.fill")
+                .font(.headline)
+                .foregroundStyle(.orange)
+            Text(
+                "macOS protects Google Chrome's data from other apps. In Privacy & Security › Files & Folders, expand Diriger.app and turn on Google Chrome.app, then relaunch Diriger."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Button("Open Privacy & Security…") {
+                    ChromeDataAccess.openSystemSettings()
+                }
+                Button("Relaunch Diriger") {
+                    ChromeDataAccess.relaunchDiriger()
+                }
+            }
+        }
+        .padding(.vertical, 2)
     }
 
     private var defaultBrowserSection: some View {

@@ -12,8 +12,16 @@ enum ChromeProfileService {
         chromeSupportDirectory.appendingPathComponent("Local State", isDirectory: false)
     }
 
-    nonisolated static func loadProfiles() async -> [ChromeProfile] {
-        await loadProfiles(localStateURL: localStateURL)
+    struct LoadResult: Sendable {
+        let profiles: [ChromeProfile]
+        /// macOS refused to let Diriger read Chrome's data folder. On macOS 27+ the
+        /// user must allow Diriger.app → Google Chrome.app in Privacy & Security →
+        /// Files & Folders, then relaunch Diriger.
+        let accessDenied: Bool
+    }
+
+    nonisolated static func loadProfiles() async -> LoadResult {
+        load(localStateURL: localStateURL)
     }
 
     nonisolated static func loadProfiles(localStateURL url: URL) async -> [ChromeProfile] {
@@ -24,6 +32,10 @@ enum ChromeProfileService {
     /// before `RuleStore` initializes). Reads the same JSON payload from disk;
     /// the `async` variant exists only so callers can schedule it off the main thread.
     nonisolated static func loadProfilesSync(localStateURL url: URL = localStateURL) -> [ChromeProfile] {
+        load(localStateURL: url).profiles
+    }
+
+    nonisolated static func load(localStateURL url: URL) -> LoadResult {
         let data: Data
         do {
             data = try Data(contentsOf: url)
@@ -32,9 +44,24 @@ enum ChromeProfileService {
                 .error(
                     "Failed to read Chrome Local State at \(url.path, privacy: .public): \(error.localizedDescription, privacy: .public)"
                 )
-            return []
+            return LoadResult(profiles: [], accessDenied: isAccessDenied(error))
         }
-        return parseProfiles(from: data)
+        return LoadResult(profiles: parseProfiles(from: data), accessDenied: false)
+    }
+
+    /// True for permission failures (as opposed to Chrome simply not being installed).
+    nonisolated static func isAccessDenied(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        if nsError.domain == NSCocoaErrorDomain, nsError.code == NSFileReadNoPermissionError {
+            return true
+        }
+        if nsError.domain == NSPOSIXErrorDomain, [Int(EPERM), Int(EACCES)].contains(nsError.code) {
+            return true
+        }
+        if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? Error {
+            return isAccessDenied(underlying)
+        }
+        return false
     }
 
     /// Parse a Chrome `Local State` JSON payload into `ChromeProfile` values.

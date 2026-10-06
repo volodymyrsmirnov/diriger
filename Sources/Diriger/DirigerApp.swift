@@ -6,6 +6,8 @@ import KeyboardShortcuts
 @Observable
 final class ProfileManager {
     var profiles: [ChromeProfile] = []
+    /// macOS (27+) blocked reading Chrome's data folder; the UI explains how to grant access.
+    private(set) var chromeAccessDenied = false
 
     private let watcher: ChromeLocalStateWatcher
     private var remoteObserver: NSObjectProtocol?
@@ -41,7 +43,9 @@ final class ProfileManager {
     // notification closure uses [weak self] so post-deallocation firings are no-ops.
 
     func loadProfiles() async {
-        profiles = await ChromeProfileService.loadProfiles()
+        let result = await ChromeProfileService.loadProfiles()
+        profiles = result.profiles
+        chromeAccessDenied = result.accessDenied
         ProfileAvatar.invalidateImageCache()
         updateSyncedShortcutRegistrations()
         registerShortcuts()
