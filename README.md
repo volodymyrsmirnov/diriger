@@ -1,5 +1,7 @@
 # Diriger
 
+> 📝 Blog post: [I got lost in my Chrome profiles, so I built Diriger](https://volodymyr.smirnov.im/writing/diriger/)
+
 A lightweight macOS menu bar app for working with multiple Google Chrome profiles.
 
 ## Features
